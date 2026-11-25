@@ -1,0 +1,12 @@
+<?php
+namespace App\Controllers\Api;
+use App\Controllers\BaseController; use App\Libraries\GenieAcsClient;
+class CustomerController extends BaseController {
+ private function client():GenieAcsClient{return new GenieAcsClient();}
+ public function me(){$c=$this->requireCustomer();return $c?$this->json(['success'=>true,'customer'=>$c]):$this->json(['success'=>false],401);}
+ public function device(){$c=$this->requireCustomer();if(!$c)return $this->json(['success'=>false],401);$id=$c['deviceId']??'';if(!$id)return $this->json(['success'=>false,'message'=>'Perangkat belum dikaitkan dengan akun ini.'],404);try{$d=$this->client()->request('GET','devices/'.rawurlencode($id).'?projection=_id,_deviceId,_lastInform,InternetGatewayDevice');return $this->json(['success'=>true,'device'=>$d]);}catch(\Throwable $e){return $this->json(['success'=>false,'message'=>$e->getMessage()],502);}}
+ public function wifi(){return $this->device();}
+ public function updateSsid(){return $this->updateParameter('SSID');} public function updatePassword(){return $this->updateParameter('KeyPassphrase');}
+ private function updateParameter(string $parameter){$c=$this->requireCustomer();if(!$c)return $this->json(['success'=>false],401);$d=$this->request->getJSON(true)?:$this->request->getPost();$i=(int)($d['index']??0);$v=trim((string)($d['value']??''));if($i<1||$i>8||$v==='')return $this->json(['success'=>false,'message'=>'Parameter tidak valid.'],422);if($parameter==='KeyPassphrase'&&(strlen($v)<8||strlen($v)>63))return $this->json(['success'=>false,'message'=>'Password WiFi harus 8-63 karakter.'],422);if(empty($c['deviceId']))return $this->json(['success'=>false,'message'=>'Device belum dipetakan.'],404);$path="InternetGatewayDevice.LANDevice.1.WLANConfiguration.{$i}.{$parameter}";try{$this->client()->command((string)$c['deviceId'],'setParameterValues',[[$path,$v,'xsd:string']]);return $this->json(['success'=>true,'message'=>'Perintah konfigurasi dikirim.']);}catch(\Throwable $e){return $this->json(['success'=>false,'message'=>$e->getMessage()],502);}}
+ public function reboot(){$c=$this->requireCustomer();if(!$c)return $this->json(['success'=>false],401);try{$this->client()->command((string)$c['deviceId'],'reboot');return $this->json(['success'=>true,'message'=>'Perintah restart dikirim.']);}catch(\Throwable $e){return $this->json(['success'=>false,'message'=>$e->getMessage()],502);}}
+}
