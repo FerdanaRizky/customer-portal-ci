@@ -18,7 +18,7 @@ class Filters extends BaseFilters
     ];
 
     public array $globals = [
-        'before' => ['csrf' => ['except' => ['api/*']]],
+        'before' => ['csrf'],
         'after'  => ['toolbar'],
     ];
 

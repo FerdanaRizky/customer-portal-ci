@@ -1,21 +1,233 @@
 <?php
+
 namespace App\Controllers\Api;
-use App\Controllers\BaseController; use App\Libraries\WhatsappGateway;
-class AuthController extends BaseController {
- public function requestOtp(){
-  $d=$this->request->getJSON(true)?:$this->request->getPost();$phone=preg_replace('/[^0-9]/','',(string)($d['phone']??''));
-  if(strlen($phone)<9||strlen($phone)>15)return $this->json(['success'=>false,'message'=>'Nomor WhatsApp tidak valid.'],422);
-  $db=db_connect();$c=$db->table('customers')->where('phone',$phone)->where('is_active',1)->get()->getRowArray();if(!$c)return $this->json(['success'=>false,'message'=>'Nomor belum terdaftar.'],404);
-  if($db->table('otp_codes')->where('phone',$phone)->where('created_at >',date('Y-m-d H:i:s',time()-60))->countAllResults())return $this->json(['success'=>false,'message'=>'Tunggu 60 detik sebelum meminta OTP lagi.'],429);
-  $otp=(string)random_int(100000,999999);$db->table('otp_codes')->insert(['phone'=>$phone,'otp_hash'=>password_hash($otp,PASSWORD_DEFAULT),'expires_at'=>date('Y-m-d H:i:s',time()+300),'attempts'=>0,'created_at'=>date('Y-m-d H:i:s')]);
-  try{(new WhatsappGateway())->sendText($phone,'Kode OTP Customer Portal Anda: '.$otp.'. Berlaku 5 menit. Jangan bagikan kode ini kepada siapa pun.');}catch(\Throwable $e){log_message('error',$e->getMessage());return $this->json(['success'=>false,'message'=>'Gateway WhatsApp belum siap. Hubungi administrator.'],503);}
-  return $this->json(['success'=>true,'message'=>'OTP dikirim ke WhatsApp.','expiresIn'=>300]);
- }
- public function verifyOtp(){
-  $d=$this->request->getJSON(true)?:$this->request->getPost();$phone=preg_replace('/[^0-9]/','',(string)($d['phone']??''));$otp=preg_replace('/\D/','',(string)($d['otp']??''));$db=db_connect();$r=$db->table('otp_codes')->where('phone',$phone)->orderBy('id','DESC')->get()->getRowArray();
-  if(!$r||strtotime($r['expires_at'])<time()||(int)$r['attempts']>=3||!password_verify($otp,$r['otp_hash'])){if($r)$db->table('otp_codes')->where('id',$r['id'])->update(['attempts'=>(int)$r['attempts']+1]);return $this->json(['success'=>false,'message'=>'OTP tidak valid atau kedaluwarsa.'],422);}
-  $c=$db->table('customers')->where('phone',$phone)->where('is_active',1)->get()->getRowArray();if(!$c)return $this->json(['success'=>false,'message'=>'Akun pelanggan tidak aktif.'],403);
-  session()->regenerate(true);session()->set('customer',['id'=>$c['id'],'phone'=>$phone,'name'=>$c['customer_name'],'deviceId'=>$c['genieacs_device_id']]);$db->table('otp_codes')->where('id',$r['id'])->delete();return $this->json(['success'=>true,'redirect'=>'/dashboard']);
- }
- public function logout(){session()->remove('customer');session()->regenerate(true);return $this->json(['success'=>true,'redirect'=>'/']);}
+
+use App\Controllers\BaseController;
+use App\Libraries\GenieAcsClient;
+use App\Libraries\WhatsappGateway;
+
+class AuthController extends BaseController
+{
+    private function normalizePhone(array $data): string
+    {
+        return preg_replace('/[^0-9]/', '', (string) ($data['phone'] ?? ''));
+    }
+
+    private function findCustomerDevice(string $phone): ?array
+    {
+        return (new GenieAcsClient())->findDeviceByPhone($phone);
+    }
+
+    private function deviceName(array $device, string $phone): string
+    {
+        $info = $device['InternetGatewayDevice']['DeviceInfo'] ?? [];
+
+        $manufacturer = $info['Manufacturer']['_value'] ?? '';
+        $model = $info['ModelName']['_value'] ?? '';
+
+        $name = trim($manufacturer . ' ' . $model);
+
+        return $name !== '' ? $name : $phone;
+    }
+
+    public function requestOtp()
+    {
+        $data = $this->request->getJSON(true) ?: $this->request->getPost();
+        $phone = $this->normalizePhone($data);
+
+        if (strlen($phone) < 9 || strlen($phone) > 15) {
+            return $this->json([
+                'success' => false,
+                'message' => 'Nomor WhatsApp tidak valid.',
+            ], 422);
+        }
+
+        // Pastikan nomor memiliki tag customer:<nomor> di GenieACS.
+        try {
+            $device = $this->findCustomerDevice($phone);
+        } catch (\Throwable $e) {
+            log_message('error', 'GenieACS request OTP error: {error}', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->json([
+                'success' => false,
+                'message' => 'Layanan GenieACS sedang tidak dapat dihubungi. Silakan coba lagi.',
+            ], 503);
+        }
+
+        if (!$device || empty($device['_id'])) {
+            return $this->json([
+                'success' => false,
+                'message' => 'Nomor belum terdaftar di GenieACS.',
+            ], 404);
+        }
+
+        $db = db_connect();
+        $now = date('Y-m-d H:i:s');
+
+        // Batasi permintaan OTP: satu kali setiap 60 detik.
+        $recentOtp = $db->table('otp_codes')
+            ->where('phone', $phone)
+            ->where('created_at >', date('Y-m-d H:i:s', time() - 60))
+            ->countAllResults();
+
+        if ($recentOtp > 0) {
+            return $this->json([
+                'success' => false,
+                'message' => 'Tunggu 60 detik sebelum meminta OTP lagi.',
+            ], 429);
+        }
+
+        $otp = (string) random_int(100000, 999999);
+
+        $db->table('otp_codes')->insert([
+            'phone' => $phone,
+            'otp_hash' => password_hash($otp, PASSWORD_DEFAULT),
+            'expires_at' => date('Y-m-d H:i:s', time() + 300),
+            'attempts' => 0,
+            'created_at' => $now,
+        ]);
+
+        $otpId = $db->insertID();
+
+        try {
+            (new WhatsappGateway())->sendText(
+                $phone,
+                'Kode OTP Customer Portal Anda: ' . $otp .
+                '. Berlaku 5 menit. Jangan bagikan kode ini kepada siapa pun.'
+            );
+        } catch (\Throwable $e) {
+            // OTP yang gagal dikirim tidak boleh tetap bisa digunakan.
+            if ($otpId) {
+                $db->table('otp_codes')->where('id', $otpId)->delete();
+            }
+
+            log_message('error', 'GOWA OTP delivery error: {error}', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->json([
+                'success' => false,
+                'message' => 'Gagal mengirim OTP melalui WhatsApp. Silakan coba lagi.',
+            ], 503);
+        }
+
+        return $this->json([
+            'success' => true,
+            'message' => 'OTP dikirim ke WhatsApp.',
+            'expiresIn' => 300,
+        ]);
+    }
+
+    public function verifyOtp()
+    {
+        $data = $this->request->getJSON(true) ?: $this->request->getPost();
+
+        $phone = $this->normalizePhone($data);
+        $otp = preg_replace('/[^0-9]/', '', (string) ($data['otp'] ?? ''));
+
+        if (strlen($phone) < 9 || strlen($phone) > 15 || !preg_match('/^\d{6}$/', $otp)) {
+            return $this->json([
+                'success' => false,
+                'message' => 'Nomor WhatsApp atau kode OTP tidak valid.',
+            ], 422);
+        }
+
+        $db = db_connect();
+
+        // Ambil OTP terbaru untuk nomor tersebut.
+        $record = $db->table('otp_codes')
+            ->where('phone', $phone)
+            ->orderBy('id', 'DESC')
+            ->get()
+            ->getRowArray();
+
+        if (!$record) {
+            return $this->json([
+                'success' => false,
+                'message' => 'OTP tidak ditemukan. Silakan minta kode baru.',
+            ], 422);
+        }
+
+        $attempts = (int) $record['attempts'];
+
+        if ($attempts >= 3) {
+            return $this->json([
+                'success' => false,
+                'message' => 'Batas percobaan OTP tercapai. Silakan minta kode baru.',
+            ], 422);
+        }
+
+        $isExpired = strtotime($record['expires_at']) < time();
+        $isCorrect = password_verify($otp, $record['otp_hash']);
+
+        if ($isExpired || !$isCorrect) {
+            $db->table('otp_codes')
+                ->where('id', $record['id'])
+                ->update(['attempts' => $attempts + 1]);
+
+            return $this->json([
+                'success' => false,
+                'message' => $isExpired
+                    ? 'Kode OTP sudah kedaluwarsa. Silakan minta kode baru.'
+                    : 'Kode OTP salah.',
+            ], 422);
+        }
+
+        // Periksa kembali tag GenieACS sebelum membuat sesi login.
+        try {
+            $device = $this->findCustomerDevice($phone);
+        } catch (\Throwable $e) {
+            log_message('error', 'GenieACS OTP verification error: {error}', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->json([
+                'success' => false,
+                'message' => 'Tidak dapat memverifikasi perangkat di GenieACS. Silakan coba lagi.',
+            ], 503);
+        }
+
+        if (!$device || empty($device['_id'])) {
+            $db->table('otp_codes')->where('id', $record['id'])->delete();
+
+            return $this->json([
+                'success' => false,
+                'message' => 'Nomor tidak lagi terdaftar di GenieACS.',
+            ], 403);
+        }
+
+        $deviceId = (string) $device['_id'];
+        $name = $this->deviceName($device, $phone);
+
+        session()->regenerate(true);
+
+        session()->set('customer', [
+            'id' => $deviceId,
+            'phone' => $phone,
+            'name' => $name,
+            'deviceId' => $deviceId,
+        ]);
+
+        // OTP hanya dapat digunakan satu kali.
+        $db->table('otp_codes')->where('id', $record['id'])->delete();
+
+        return $this->json([
+            'success' => true,
+            'message' => 'Login berhasil.',
+            'redirect' => '/dashboard',
+        ]);
+    }
+
+    public function logout()
+    {
+        session()->remove('customer');
+        session()->regenerate(true);
+
+        return $this->json([
+            'success' => true,
+            'redirect' => '/',
+        ]);
+    }
 }

@@ -1,1 +1,225 @@
-<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dashboard Pelanggan</title><style>:root{--bg:#0A1120;--surface:#121B2E;--border:#223252;--text:#E7EEF7;--muted:#8A99B5}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px system-ui}.wrap{max-width:960px;margin:auto;padding:24px}.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px;margin:14px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px}.muted{color:var(--muted)}button,input{padding:11px;border:1px solid var(--border);border-radius:8px;background:#16223A;color:var(--text);margin:5px}input{max-width:260px}.msg{color:#16C4B0}</style></head><body><main class="wrap"><header style="display:flex;justify-content:space-between"><h1>Pesona Wifi</h1><button id="logout">Keluar</button></header><section class="card"><h2>Informasi Perangkat</h2><div class="grid"><div><span class="muted">WhatsApp</span><h3 id="phone">-</h3></div><div><span class="muted">Product Class</span><h3 id="product">-</h3></div><div><span class="muted">Serial Number</span><h3 id="serial">-</h3></div><div><span class="muted">Last Inform</span><h3 id="last">-</h3></div></div><p id="msg" class="msg"></p><button id="refresh">Refresh</button><button id="reboot">Restart Modem</button></section><section class="card"><h2>Pengaturan WiFi</h2><div id="wifi"></div></section></main><script>const $=x=>document.getElementById(x);async function api(u,o={}){let r=await fetch(u,{headers:{'Content-Type':'application/json'},...o});let d=await r.json();if(r.status===401)location.href='/';if(!r.ok)throw Error(d.message||'Request gagal');return d}let deviceId='';async function load(){try{let me=await api('/api/customer/me');$('phone').textContent=me.customer.phone;deviceId=me.customer.deviceId;let d=await api('/api/customer/device'),g=d.device.InternetGatewayDevice||{};$('product').textContent=g.DeviceInfo?.ProductClass?._value||'-';$('serial').textContent=g.DeviceInfo?.SerialNumber?._value||'-';$('last').textContent=d.device._lastInform||'-';let w=g.LANDevice?.['1']?.WLANConfiguration||{};let h='';[1,5].forEach(i=>{let x=w[String(i)]||{};h+='<div><b>SSID '+i+'</b><p>'+esc(x.SSID?._value||'-')+'</p><input id="s'+i+'" placeholder="Nama WiFi" value="'+esc(x.SSID?._value||'')+'"><button onclick="change('+i+',\'SSID\')">Ubah SSID</button><input id="p'+i+'" type="password" placeholder="Password baru"><button onclick="change('+i+',\'KeyPassphrase\')">Ubah Password</button></div>'});$('wifi').innerHTML=h}catch(e){$('msg').textContent=e.message}}function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}async function change(i,k){try{await api('/api/customer/wifi/'+(k==='SSID'?'ssid':'password'),{method:'POST',body:JSON.stringify({index:i,value:document.getElementById((k==='SSID'?'s':'p')+i).value})});$('msg').textContent='Perintah dikirim ke GenieACS'}catch(e){$('msg').textContent=e.message}}$('refresh').onclick=load;$('logout').onclick=async()=>{await api('/api/auth/logout',{method:'POST'});location.href='/'};$('reboot').onclick=async()=>{if(confirm('Restart modem sekarang?'))try{await api('/api/customer/device/reboot',{method:'POST'});$('msg').textContent='Perintah restart dikirim'}catch(e){$('msg').textContent=e.message}};load();</script></body></html>
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard Pelanggan</title>
+<style>
+:root{--bg:#0A1120;--surface:#121B2E;--border:#223252;--text:#E7EEF7;--muted:#8A99B5}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px system-ui}
+.wrap{max-width:960px;margin:auto;padding:24px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px;margin:14px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px}
+.muted{color:var(--muted)}
+button,input{padding:11px;border:1px solid var(--border);border-radius:8px;background:#16223A;color:var(--text);margin:5px}
+input{max-width:260px;width:100%}
+.msg{color:#16C4B0}
+.wifi-item{border:1px solid var(--border);border-radius:12px;padding:15px;margin:12px 0}
+.wifi-item h3{margin-top:0}
+.status{font-size:12px;color:var(--muted)}
+@media(max-width:600px){.wrap{padding:12px}.card{padding:16px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+</head>
+<body>
+<main class="wrap">
+
+<header style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+<h1>Pesona Wifi</h1>
+<button id="logout">Keluar</button>
+</header>
+
+<section class="card">
+<h2>Informasi Perangkat</h2>
+<div class="grid">
+<div><span class="muted">WhatsApp</span><h3 id="phone">-</h3></div>
+<div><span class="muted">Product Class</span><h3 id="product">-</h3></div>
+<div><span class="muted">Serial Number</span><h3 id="serial">-</h3></div>
+<div><span class="muted">Last Inform</span><h3 id="last">-</h3></div>
+<div><span class="muted">Manufacturer</span><h3 id="manufacturer">-</h3></div>
+<div><span class="muted">Jenis Koneksi</span><h3 id="accessType">-</h3></div>
+<div><span class="muted">Perangkat Terhubung</span><h3 id="connected">-</h3></div>
+<div><span class="muted">Optical RX Power</span><h3 id="rxPower">-</h3></div>
+</div>
+<p id="msg" class="msg"></p>
+<button id="refresh">Refresh</button>
+<button id="reboot">Restart Modem</button>
+</section>
+
+<section class="card">
+<h2>Pengaturan WiFi</h2>
+<div id="wifi"><p class="muted">Memuat informasi WiFi...</p></div>
+</section>
+
+</main>
+
+<script>
+const $=x=>document.getElementById(x);
+
+let csrfHash=null;
+
+async function getCsrfHash(){
+    if(!csrfHash){
+        const r=await fetch('/api/config');
+        const d=await r.json();
+        if(!r.ok || !d.csrfHash) throw Error('Gagal mengambil token keamanan.');
+        csrfHash=d.csrfHash;
+    }
+    return csrfHash;
+}
+
+async function api(u,o={}){
+    const method=(o.method||'GET').toUpperCase();
+    const headers={
+        'Content-Type':'application/json',
+        ...(o.headers||{})
+    };
+
+    if(['POST','PUT','PATCH','DELETE'].includes(method)){
+        headers['X-CSRF-TOKEN']=await getCsrfHash();
+    }
+
+    const r=await fetch(u,{
+        ...o,
+        headers
+    });
+
+    let d={};
+    try{d=await r.json()}catch(e){}
+
+    if(r.status===401){
+        location.href='/';
+        throw Error('Sesi berakhir. Silakan login kembali.');
+    }
+
+    if(!r.ok || d.success===false){
+        throw Error(d.message||'Request gagal');
+    }
+
+    return d;
+}
+
+function esc(s){
+    return String(s??'').replace(/[&<>"']/g,c=>({
+        '&':'&amp;',
+        '<':'&lt;',
+        '>':'&gt;',
+        '"':'&quot;',
+        "'":'&#39;'
+    }[c]));
+}
+
+function formatDate(value){
+    if(!value)return '-';
+    const d=new Date(value);
+    return isNaN(d.getTime())?value:d.toLocaleString('id-ID');
+}
+
+function renderWifi(list){
+    if(!Array.isArray(list)||list.length===0){
+        $('wifi').innerHTML='<p class="muted">Informasi WiFi tidak tersedia.</p>';
+        return;
+    }
+
+    $('wifi').innerHTML=list.map(x=>{
+        const i=Number(x.index);
+        const ssid=esc(x.ssid||'');
+        const enabled=x.enabled===true;
+
+        return `
+        <div class="wifi-item">
+            <h3>WiFi ${i}</h3>
+            <p>Nama WiFi: <b>${ssid||'-'}</b></p>
+            <p>Status: <b>${enabled?'Aktif':'Nonaktif'}</b></p>
+            <p>Perangkat terhubung: <b>${Number(x.connectedDevices)||0}</b></p>
+            <p>Keamanan: <b>${esc(x.security||'-')}</b></p>
+
+            <div>
+                <input id="s${i}" placeholder="Nama WiFi baru" value="${ssid}">
+                <button onclick="change(${i},'SSID')">Ubah SSID</button>
+            </div>
+
+            <div>
+                <input id="p${i}" type="password" placeholder="Password baru">
+                <button onclick="change(${i},'KeyPassphrase')">Ubah Password</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+async function load(){
+    $('msg').textContent='Memuat data perangkat...';
+
+    try{
+        const me=await api('/api/customer/me');
+        $('phone').textContent=me.customer.phone||'-';
+
+        const result=await api('/api/customer/device');
+        const d=result.device||{};
+
+        $('product').textContent=d.model||'-';
+        $('serial').textContent=d.serialNumber||'-';
+        $('manufacturer').textContent=d.manufacturer||'-';
+        $('last').textContent=formatDate(d.lastInform);
+        $('accessType').textContent=d.connection?.accessType||'-';
+        $('connected').textContent=Number(d.connectedDevices??0);
+
+        const rx=d.connection?.opticalRxPowerRaw;
+        $('rxPower').textContent=rx===null||rx===undefined?'-':String(rx);
+
+        renderWifi(d.wifi);
+
+        $('msg').textContent='Data perangkat berhasil diperbarui.';
+    }catch(e){
+        $('msg').textContent=e.message;
+    }
+}
+
+async function change(i,k){
+    const field=k==='SSID'?'s':'p';
+    const value=document.getElementById(field+i)?.value||'';
+
+    if(!value.trim()){
+        $('msg').textContent=k==='SSID'?'Nama WiFi tidak boleh kosong.':'Password tidak boleh kosong.';
+        return;
+    }
+
+    try{
+        const endpoint=k==='SSID'?'ssid':'password';
+
+        await api('/api/customer/wifi/'+endpoint,{
+            method:'POST',
+            body:JSON.stringify({index:i,value:value})
+        });
+
+        $('msg').textContent='Perintah perubahan WiFi berhasil dikirim ke GenieACS. Perubahan perangkat mungkin memerlukan waktu.';
+    }catch(e){
+        $('msg').textContent=e.message;
+    }
+}
+
+$('refresh').onclick=load;
+
+$('logout').onclick=async()=>{
+    try{
+        await api('/api/auth/logout',{method:'POST'});
+    }finally{
+        location.href='/';
+    }
+};
+
+$('reboot').onclick=async()=>{
+    if(!confirm('Restart modem sekarang?'))return;
+
+    try{
+        await api('/api/customer/device/reboot',{method:'POST'});
+        $('msg').textContent='Perintah restart berhasil dikirim.';
+    }catch(e){
+        $('msg').textContent=e.message;
+    }
+};
+
+load();
+</script>
+</body>
+</html>

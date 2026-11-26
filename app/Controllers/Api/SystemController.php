@@ -14,6 +14,9 @@ class SystemController extends BaseController
         return $this->json([
             'appName' => $settings->setting('app_name', 'Pesona Wifi'),
             'logoUrl' => $settings->setting('logo_url'),
+            'csrfName' => csrf_token(),
+            'csrfHeader' => csrf_header(),
+            'csrfHash' => csrf_hash(),
         ]);
     }
 }
