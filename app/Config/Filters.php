@@ -13,6 +13,8 @@ class Filters extends BaseFilters
         'invalidchars' => \CodeIgniter\Filters\InvalidChars::class,
         'secureheaders'=> \CodeIgniter\Filters\SecureHeaders::class,
         'forcehttps'   => \CodeIgniter\Filters\ForceHTTPS::class,
+        'pagecache'    => \CodeIgniter\Filters\PageCache::class,
+        'performance'  => \CodeIgniter\Filters\PerformanceMetrics::class,
     ];
 
     public array $globals = [
