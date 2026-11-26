@@ -1,4 +1,10 @@
 <?php
+
 namespace Config;
-use CodeIgniter\Config\Logger as BaseLogger;
-class Logger extends BaseLogger { public $threshold=4; }
+
+use CodeIgniter\Config\BaseConfig;
+
+class Logger extends BaseConfig
+{
+    public int $threshold = 4;
+}
