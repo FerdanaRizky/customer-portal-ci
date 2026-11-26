@@ -7,6 +7,7 @@ define('COMPOSER_PATH', dirname(__DIR__) . DIRECTORY_SEPARATOR . 'vendor' . DIRE
 
 chdir(FCPATH);
 
+require_once COMPOSER_PATH;
 require FCPATH . '../app/Config/Paths.php';
 $paths = new Config\Paths();
 
