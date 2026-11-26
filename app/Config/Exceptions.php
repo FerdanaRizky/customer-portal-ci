@@ -1,7 +1,17 @@
 <?php
+
 namespace Config;
-use CodeIgniter\Config\Exceptions as BaseExceptions;
-class Exceptions extends BaseExceptions {
- public int $logLevel=4;
- public string $errorViewPath=APPPATH.'Views/errors';
+
+use CodeIgniter\Config\BaseConfig;
+
+/**
+ * Exception and error display configuration.
+ */
+class Exceptions extends BaseConfig
+{
+    public bool $log = true;
+
+    public array $ignoreCodes = [404];
+
+    public string $errorViewPath = APPPATH . 'Views/errors';
 }
