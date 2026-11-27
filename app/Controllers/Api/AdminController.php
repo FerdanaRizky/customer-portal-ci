@@ -579,7 +579,7 @@ class AdminController extends BaseController
                 'pairCode' => $pairing['pairCode'],
                 'message' => 'Kode pairing berhasil dibuat untuk device yang sama. Masukkan kode tersebut di WhatsApp pada ponsel.',
             ]);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             return $this->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
     }
