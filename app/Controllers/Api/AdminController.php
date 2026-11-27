@@ -355,7 +355,7 @@ class AdminController extends BaseController
                 'hasLoggedInPortalSession' => $hasLoggedInPortalSession,
                 'totalGowaDevices' => count($allDevices),
             ]);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             return $this->json(['success' => false, 'message' => $e->getMessage()], 502);
         }
     }
@@ -407,7 +407,7 @@ class AdminController extends BaseController
                 'success' => true,
                 'message' => 'Device dilepas dari daftar Customer Portal. Sesi GOWA tetap aktif dan tidak dihapus atau di-logout.',
             ]);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             return $this->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
     }
@@ -426,6 +426,11 @@ class AdminController extends BaseController
 
         try {
             $devices = (new WhatsappGateway())->listDevices();
+            $hidden = json_decode((string) (new PortalModel())->setting('gowa_hidden_devices', '[]'), true);
+            $hidden = is_array($hidden) ? array_values(array_filter($hidden, 'is_string')) : [];
+            if (in_array($deviceId, $hidden, true)) {
+                return $this->json(['success' => false, 'message' => 'Device sudah dilepas dari daftar Portal. Sinkronkan atau buat sesi Portal baru.'], 422);
+            }
             $exists = false;
             foreach ($devices as $device) {
                 if (hash_equals($device['id'], $deviceId)) {
