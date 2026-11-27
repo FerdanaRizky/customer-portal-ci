@@ -326,12 +326,63 @@ class AdminController extends BaseController
             return $r;
         }
 
+        $from = trim((string) $this->request->getGet('from'));
+        $to = trim((string) $this->request->getGet('to'));
+        $phone = trim((string) $this->request->getGet('phone'));
+        $status = trim((string) $this->request->getGet('status'));
+
+        foreach (['from' => $from, 'to' => $to] as $field => $date) {
+            if ($date !== '') {
+                $parts = explode('-', $date);
+                if (count($parts) !== 3
+                    || !checkdate((int) ($parts[1] ?? 0), (int) ($parts[2] ?? 0), (int) ($parts[0] ?? 0))
+                    || !preg_match('/^\\d{4}-\\d{2}-\\d{2}$/', $date)
+                ) {
+                    return $this->json([
+                        'success' => false,
+                        'message' => 'Format tanggal filter tidak valid.',
+                    ], 400);
+                }
+            }
+        }
+
+        if ($status !== '' && !in_array($status, ['success', 'failed'], true)) {
+            return $this->json([
+                'success' => false,
+                'message' => 'Filter status tidak valid.',
+            ], 400);
+        }
+
+        $builder = db_connect()->table('otp_delivery_logs');
+
+        if ($from !== '') {
+            $builder->where('created_at >=', $from . ' 00:00:00');
+        }
+        if ($to !== '') {
+            $builder->where('created_at <=', $to . ' 23:59:59');
+        }
+        if ($phone !== '') {
+            $builder->like('phone', $phone);
+        }
+        if ($status === 'success') {
+            $builder->where('status', 'sent');
+        } elseif ($status === 'failed') {
+            $builder->whereIn('status', [
+                'failed',
+                'customer_not_found',
+                'system_error',
+                'rate_limited',
+            ]);
+        }
+
+        $logs = $builder->orderBy('id', 'DESC')
+            ->limit(100)
+            ->get()->getResultArray();
+
         return $this->json([
             'success' => true,
-            'logs' => db_connect()->table('otp_delivery_logs')
-                ->orderBy('id', 'DESC')
-                ->limit(100)
-                ->get()->getResultArray(),
+            'logs' => $logs,
+            'count' => count($logs),
         ]);
     }
 
