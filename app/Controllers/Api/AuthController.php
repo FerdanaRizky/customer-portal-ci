@@ -20,6 +20,17 @@ class AuthController extends BaseController
         return $phone;
     }
 
+    private function auditAuth(string $event, string $phone): void
+    {
+        try {
+            (new \\App\\Models\\PortalModel())->log($event, $phone);
+        } catch (\\Throwable $e) {
+            log_message('error', 'Customer auth audit write failed: {error}', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
     private function findCustomerDevice(string $phone): ?array
     {
         return (new GenieAcsClient())->findDeviceByPhone($phone);
@@ -263,6 +274,7 @@ class AuthController extends BaseController
 
         // OTP hanya dapat digunakan satu kali.
         $db->table('otp_codes')->where('id', $record['id'])->delete();
+        $this->auditAuth('customer.login_success', $phone);
 
         return $this->json([
             'success' => true,
@@ -273,6 +285,11 @@ class AuthController extends BaseController
 
     public function logout()
     {
+        $customer = session('customer');
+        if (is_array($customer) && !empty($customer['phone'])) {
+            $this->auditAuth('customer.logout', (string) $customer['phone']);
+        }
+
         session()->remove('customer');
         session()->regenerate(true);
 
