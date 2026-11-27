@@ -249,7 +249,30 @@ small{color:var(--muted)}
  <section class="card">
   <h2>Riwayat Pengiriman OTP WhatsApp</h2>
   <p class="muted">Menampilkan maksimal 100 percobaan OTP terbaru. Kode OTP tidak pernah disimpan di riwayat.</p>
-  <button class="secondary" id="otpDeliveryLogs">Muat Riwayat OTP</button>
+  <div class="grid">
+   <div>
+    <label for="otpLogFrom">Dari tanggal</label>
+    <input type="date" id="otpLogFrom">
+   </div>
+   <div>
+    <label for="otpLogTo">Sampai tanggal</label>
+    <input type="date" id="otpLogTo">
+   </div>
+   <div>
+    <label for="otpLogPhone">Nomor WhatsApp</label>
+    <input type="text" id="otpLogPhone" inputmode="numeric" placeholder="Cari nomor WhatsApp">
+   </div>
+   <div>
+    <label for="otpLogStatus">Status pengiriman</label>
+    <select id="otpLogStatus">
+     <option value="">Semua status</option>
+     <option value="success">Berhasil</option>
+     <option value="failed">Gagal</option>
+    </select>
+   </div>
+  </div>
+  <button class="secondary" id="otpDeliveryLogs">Terapkan Filter</button>
+  <button class="secondary" id="otpLogReset">Reset Filter</button>
   <pre id="otpDeliveryLogsResult"></pre>
  </section>
 
@@ -776,20 +799,38 @@ $('logs').onclick=async()=>{
  try{$('logsResult').textContent=JSON.stringify(await api('/api/admin/logs'),null,2);}
  catch(e){$('logsResult').textContent=e.message;}
 };
-$('otpDeliveryLogs').onclick=async()=>{
+async function loadOtpDeliveryLogs(){
  try{
-  const data=await api('/api/admin/otp-delivery-logs');
+  const params=new URLSearchParams();
+  const from=$('otpLogFrom').value;
+  const to=$('otpLogTo').value;
+  const phone=$('otpLogPhone').value.trim();
+  const status=$('otpLogStatus').value;
+  if(from) params.set('from',from);
+  if(to) params.set('to',to);
+  if(phone) params.set('phone',phone);
+  if(status) params.set('status',status);
+  const query=params.toString();
+  const data=await api('/api/admin/otp-delivery-logs'+(query?'?'+query:''));
   const labels={sent:'Berhasil dikirim',failed:'Gagal dikirim',customer_not_found:'Nomor tidak ditemukan',system_error:'Gangguan sistem',rate_limited:'Dibatasi (tunggu 60 detik)'};
   $('otpDeliveryLogsResult').textContent=data.logs.length
-   ? data.logs.map(item=>[
+   ? 'Ditemukan '+data.count+' riwayat (maksimal 100 terbaru).\\n\\n'+data.logs.map(item=>[
       '#'+item.id+' | '+(labels[item.status]||item.status),
       'Nomor: '+item.phone,
       'Device: '+(item.device_id||'-'),
       'Waktu: '+item.created_at,
       'Keterangan: '+(item.message||'-')
-     ].join('\n')).join('\n\n')
-   : 'Belum ada riwayat pengiriman OTP.';
+     ].join('\\n')).join('\\n\\n')
+   : 'Tidak ada riwayat OTP yang sesuai dengan filter.';
  }catch(e){$('otpDeliveryLogsResult').textContent=e.message;}
+}
+$('otpDeliveryLogs').onclick=loadOtpDeliveryLogs;
+$('otpLogReset').onclick=()=>{
+ $('otpLogFrom').value='';
+ $('otpLogTo').value='';
+ $('otpLogPhone').value='';
+ $('otpLogStatus').value='';
+ loadOtpDeliveryLogs();
 };
 $('logout').onclick=async()=>{
  try{await api('/api/admin/auth/logout',{method:'POST'});location.reload();}
