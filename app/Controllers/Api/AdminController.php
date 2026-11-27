@@ -523,8 +523,35 @@ class AdminController extends BaseController
         }
 
         try {
+            $gateway = new WhatsappGateway();
+            $devices = $gateway->listDevices();
+
+            foreach ($devices as $device) {
+                if (str_starts_with($device['id'], 'portal-')
+                    && strtolower($device['state']) === 'logged_in') {
+                    return $this->json([
+                        'success' => false,
+                        'message' => 'Sesi WhatsApp Portal sudah aktif. Hapus sesi tersebut sebelum membuat sesi baru.',
+                    ], 409);
+                }
+            }
+
+            // Pakai kembali slot Portal yang masih menunggu pairing.
+            // Jangan membuat device baru hanya karena halaman dimuat ulang atau metode diganti.
+            foreach ($devices as $device) {
+                if (str_starts_with($device['id'], 'portal-')
+                    && strtolower($device['state']) !== 'logged_in') {
+                    return $this->json([
+                        'success' => true,
+                        'deviceId' => $device['id'],
+                        'reused' => true,
+                        'message' => 'Melanjutkan sesi Portal yang sudah ada. Tidak ada device baru dibuat.',
+                    ]);
+                }
+            }
+
             $deviceId = 'portal-' . bin2hex(random_bytes(8));
-            $result = (new WhatsappGateway())->createPortalDevice($deviceId);
+            $result = $gateway->createPortalDevice($deviceId);
             (new PortalModel())->log(
                 'whatsapp.device_created',
                 session('admin.username'),
@@ -534,9 +561,10 @@ class AdminController extends BaseController
             return $this->json([
                 'success' => true,
                 'deviceId' => $result['deviceId'],
-                'message' => 'Slot device Portal berhasil dibuat. Lanjutkan dengan meminta QR.',
+                'reused' => false,
+                'message' => 'Slot device Portal berhasil dibuat satu kali. Pilih metode pairing.',
             ]);
-        } catch (\Throwable $e) {
+        } catch (\\Throwable $e) {
             return $this->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
     }
