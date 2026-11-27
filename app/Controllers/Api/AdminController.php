@@ -253,6 +253,7 @@ class AdminController extends BaseController
         }
 
         $mime = $f->getMimeType();
+        $sizeBytes = $f->getSize();
         $extensions = [
             'image/png' => ['extension' => 'png', 'type' => IMAGETYPE_PNG],
             'image/jpeg' => ['extension' => 'jpg', 'type' => IMAGETYPE_JPEG],
@@ -298,7 +299,7 @@ class AdminController extends BaseController
         $this->audit('admin.logo_uploaded', session('admin.username'), [
             'filename' => $n,
             'mime' => $mime,
-            'sizeBytes' => $f->getSize(),
+            'sizeBytes' => $sizeBytes,
         ]);
 
         return $this->json([
