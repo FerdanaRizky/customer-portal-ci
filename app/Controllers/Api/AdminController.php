@@ -16,15 +16,44 @@ class AdminController extends BaseController
             : $this->json(['success' => false, 'message' => 'Unauthorized'], 401);
     }
 
+    private function audit(string $event, ?string $actor = null, array $detail = []): void
+    {
+        try {
+            (new PortalModel())->log($event, $actor, $detail);
+        } catch (\\Throwable $e) {
+            log_message('error', 'Admin audit write failed: {error}', ['error' => $e->getMessage()]);
+        }
+    }
+
     public function login()
     {
         $d = $this->request->getJSON(true) ?: $this->request->getPost();
+        $username = substr(trim((string) ($d['username'] ?? '')), 0, 80);
+        $ip = $this->request->getIPAddress();
+        $db = db_connect();
 
-        $r = db_connect()->table('admins')
-            ->where('username', trim((string) ($d['username'] ?? '')))
+        // Five failed attempts for the same username and IP trigger a 15-minute cooldown.
+        $failedAttempts = $db->table('audit_logs')
+            ->where('event', 'admin.login_failed')
+            ->where('actor', $username)
+            ->where('ip_address', $ip)
+            ->where('created_at >=', date('Y-m-d H:i:s', time() - 900))
+            ->countAllResults();
+
+        if ($failedAttempts >= 5) {
+            $this->audit('admin.login_throttled', $username, ['windowSeconds' => 900]);
+            return $this->json([
+                'success' => false,
+                'message' => 'Terlalu banyak percobaan login. Coba kembali dalam 15 menit.',
+            ], 429);
+        }
+
+        $r = $db->table('admins')
+            ->where('username', $username)
             ->get()->getRowArray();
 
         if (!$r || !password_verify((string) ($d['password'] ?? ''), $r['password_hash'])) {
+            $this->audit('admin.login_failed', $username, ['reason' => 'invalid_credentials']);
             return $this->json([
                 'success' => false,
                 'message' => 'Username atau password salah.'
@@ -36,12 +65,15 @@ class AdminController extends BaseController
             'id' => $r['id'],
             'username' => $r['username']
         ]);
+        $this->audit('admin.login_success', $r['username']);
 
         return $this->json(['success' => true]);
     }
 
     public function logout()
     {
+        $admin = session('admin');
+        $this->audit('admin.logout', is_array($admin) ? (string) ($admin['username'] ?? '') : null);
         session()->remove('admin');
         session()->regenerate(true);
 
