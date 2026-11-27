@@ -32,19 +32,19 @@ class AdminController extends BaseController
         $ip = $this->request->getIPAddress();
         $db = db_connect();
 
-        // Five failed attempts for the same username and IP trigger a 15-minute cooldown.
+        // Five failed attempts for the same username and IP trigger a 5-minute cooldown.
         $failedAttempts = $db->table('audit_logs')
             ->where('event', 'admin.login_failed')
             ->where('actor', $username)
             ->where('ip_address', $ip)
-            ->where('created_at >=', date('Y-m-d H:i:s', time() - 900))
+            ->where('created_at >=', date('Y-m-d H:i:s', time() - 300))
             ->countAllResults();
 
         if ($failedAttempts >= 5) {
             $this->audit('admin.login_throttled', $username, ['windowSeconds' => 900]);
             return $this->json([
                 'success' => false,
-                'message' => 'Terlalu banyak percobaan login. Coba kembali dalam 15 menit.',
+                'message' => 'Terlalu banyak percobaan login. Coba kembali dalam 5 menit.',
             ], 429);
         }
 
@@ -56,7 +56,7 @@ class AdminController extends BaseController
             $this->audit('admin.login_failed', $username, ['reason' => 'invalid_credentials']);
             return $this->json([
                 'success' => false,
-                'message' => 'Username atau password salah. Perhatikan: jika salah 5 kali dalam 15 menit, login akan dikunci sementara selama 15 menit.'
+                'message' => 'Username atau password salah. Perhatikan: jika salah 5 kali dalam 15 menit, login akan dikunci sementara selama 5 menit.'
             ], 401);
         }
 
