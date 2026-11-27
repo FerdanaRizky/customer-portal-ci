@@ -8,9 +8,11 @@ async function readApiResponse(response){
         data=JSON.parse(body);
     } catch (_) {
         console.error('API returned non-JSON response', response.status, body.slice(0,500));
-        if(response.status===403) throw Error('Permintaan ditolak oleh keamanan server. Muat ulang halaman lalu coba lagi.');
-        if(response.status>=500) throw Error('Server sedang mengalami gangguan (HTTP '+response.status+'). Silakan coba lagi atau hubungi administrator.');
-        throw Error('Respons server tidak valid (HTTP '+response.status+'). Muat ulang halaman dan coba lagi.');
+        if(response.status===404) throw Error('Nomor WhatsApp atau data yang Anda masukkan tidak ditemukan. Harap periksa kembali nomor WhatsApp yang terdaftar.');
+        if(response.status===403) throw Error('Permintaan ditolak oleh sistem keamanan. Muat ulang halaman, lalu coba lagi. Jika masih terjadi, hubungi administrator.');
+        if(response.status>=500) throw Error('Terjadi gangguan pada sistem/server (HTTP '+response.status+'). Silakan coba beberapa saat lagi atau hubungi administrator.');
+        if(response.status===400 || response.status===422) throw Error('Nomor WhatsApp atau data yang Anda masukkan tidak valid. Periksa kembali data Anda.');
+        throw Error('Terjadi kesalahan saat memproses permintaan (HTTP '+response.status+'). Silakan coba lagi.');
     }
     if(!response.ok && (!data || typeof data!=='object')) {
         throw Error('Permintaan gagal (HTTP '+response.status+').');
@@ -52,7 +54,10 @@ $('f').onsubmit=async e=>{
             location.href=data.redirect||'/dashboard';
         }
     }catch(error){
-        $('msg').textContent=error.message||'Terjadi kesalahan. Silakan coba lagi.';
+        const message=error instanceof TypeError
+            ? 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda, lalu coba lagi.'
+            : (error.message||'Terjadi kesalahan pada sistem. Silakan coba lagi.');
+        $('msg').textContent=message;
     }finally{
         $('submit').disabled=false;
     }
