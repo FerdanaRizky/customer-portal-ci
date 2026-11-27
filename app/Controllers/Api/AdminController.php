@@ -254,24 +254,52 @@ class AdminController extends BaseController
 
         $mime = $f->getMimeType();
         $extensions = [
-            'image/png' => 'png',
-            'image/jpeg' => 'jpg',
-            'image/gif' => 'gif',
-            'image/webp' => 'webp'
+            'image/png' => ['extension' => 'png', 'type' => IMAGETYPE_PNG],
+            'image/jpeg' => ['extension' => 'jpg', 'type' => IMAGETYPE_JPEG],
+            'image/gif' => ['extension' => 'gif', 'type' => IMAGETYPE_GIF],
+            'image/webp' => ['extension' => 'webp', 'type' => IMAGETYPE_WEBP],
         ];
 
-        if (!isset($extensions[$mime])) {
+        // Periksa isi file sebagai gambar sungguhan, bukan hanya MIME dari header.
+        $imageInfo = @getimagesize($f->getTempName());
+        if (
+            !isset($extensions[$mime]) ||
+            !is_array($imageInfo) ||
+            ($imageInfo[2] ?? null) !== ($extensions[$mime]['type'] ?? null) ||
+            (int) ($imageInfo[0] ?? 0) < 1 ||
+            (int) ($imageInfo[1] ?? 0) < 1 ||
+            (int) ($imageInfo[0] ?? 0) > 4096 ||
+            (int) ($imageInfo[1] ?? 0) > 4096
+        ) {
             return $this->json([
                 'success' => false,
-                'message' => 'Format tidak didukung.'
+                'message' => 'File harus berupa gambar PNG, JPG, GIF, atau WEBP yang valid dengan ukuran dimensi maksimal 4096 x 4096 piksel.'
             ], 422);
         }
 
-        $n = 'logo_' . bin2hex(random_bytes(8)) . '.' . $extensions[$mime];
-        $f->move(FCPATH . 'uploads', $n);
+        $uploadDir = FCPATH . 'uploads';
+        if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
+            return $this->json([
+                'success' => false,
+                'message' => 'Direktori upload logo tidak tersedia.'
+            ], 500);
+        }
+
+        $n = 'logo_' . bin2hex(random_bytes(8)) . '.' . $extensions[$mime]['extension'];
+        if (!$f->move($uploadDir, $n)) {
+            return $this->json([
+                'success' => false,
+                'message' => 'Logo gagal disimpan.'
+            ], 500);
+        }
 
         $url = '/uploads/' . $n;
         (new PortalModel())->saveSetting('logo_url', $url);
+        $this->audit('admin.logo_uploaded', session('admin.username'), [
+            'filename' => $n,
+            'mime' => $mime,
+            'sizeBytes' => $f->getSize(),
+        ]);
 
         return $this->json([
             'success' => true,
@@ -289,10 +317,23 @@ class AdminController extends BaseController
         $old = $m->setting('logo_url');
 
         if ($old && str_starts_with($old, '/uploads/')) {
-            @unlink(FCPATH . ltrim($old, '/'));
+            $filename = basename($old);
+            $uploadDir = realpath(FCPATH . 'uploads');
+            $oldPath = $uploadDir !== false
+                ? realpath($uploadDir . DIRECTORY_SEPARATOR . $filename)
+                : false;
+
+            if (
+                $oldPath !== false &&
+                dirname($oldPath) === $uploadDir &&
+                is_file($oldPath)
+            ) {
+                @unlink($oldPath);
+            }
         }
 
         $m->saveSetting('logo_url', null);
+        $this->audit('admin.logo_deleted', session('admin.username'));
 
         return $this->json(['success' => true]);
     }
@@ -322,11 +363,23 @@ class AdminController extends BaseController
 
         $u = trim((string) ($d['username'] ?? $row['username']));
 
-        if ($u === '') {
+        if (!preg_match('/^[A-Za-z0-9._-]{3,80}$/', $u)) {
             return $this->json([
                 'success' => false,
-                'message' => 'Username tidak boleh kosong.'
+                'message' => 'Username harus 3-80 karakter dan hanya boleh berisi huruf, angka, titik, garis bawah, atau tanda hubung.'
             ], 422);
+        }
+
+        $duplicate = db_connect()->table('admins')
+            ->where('username', $u)
+            ->where('id !=', $row['id'])
+            ->countAllResults();
+
+        if ($duplicate > 0) {
+            return $this->json([
+                'success' => false,
+                'message' => 'Username sudah digunakan. Silakan pilih username lain.'
+            ], 409);
         }
 
         $up = ['username' => $u];
