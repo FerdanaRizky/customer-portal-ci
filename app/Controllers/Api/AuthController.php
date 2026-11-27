@@ -25,6 +25,26 @@ class AuthController extends BaseController
         return (new GenieAcsClient())->findDeviceByPhone($phone);
     }
 
+    private function logOtpDelivery(string $phone, string $status, ?string $message = null): void
+    {
+        try {
+            $deviceId = (new \App\Libraries\ConfigStore())->get('gowa_device_id', 'billing');
+
+            db_connect()->table('otp_delivery_logs')->insert([
+                'phone' => $phone,
+                'device_id' => $deviceId,
+                'status' => $status,
+                'message' => $message,
+                'ip_address' => $this->request->getIPAddress(),
+                'created_at' => date('Y-m-d H:i:s'),
+            ]);
+        } catch (\Throwable $e) {
+            log_message('error', 'OTP delivery history write failed: {error}', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
     private function deviceName(array $device, string $phone): string
     {
         $info = $device['InternetGatewayDevice']['DeviceInfo'] ?? [];
@@ -53,6 +73,7 @@ class AuthController extends BaseController
         try {
             $device = $this->findCustomerDevice($phone);
         } catch (\Throwable $e) {
+            $this->logOtpDelivery($phone, 'system_error', 'GenieACS tidak dapat dihubungi.');
             log_message('error', 'GenieACS request OTP error: {error}', [
                 'error' => $e->getMessage(),
             ]);
@@ -64,6 +85,7 @@ class AuthController extends BaseController
         }
 
         if (!$device || empty($device['_id'])) {
+            $this->logOtpDelivery($phone, 'customer_not_found', 'Nomor tidak ditemukan di GenieACS.');
             return $this->json([
                 'success' => false,
                 'code' => 'CUSTOMER_NOT_FOUND',
@@ -81,6 +103,7 @@ class AuthController extends BaseController
             ->countAllResults();
 
         if ($recentOtp > 0) {
+            $this->logOtpDelivery($phone, 'rate_limited', 'Permintaan OTP terlalu sering.');
             return $this->json([
                 'success' => false,
                 'message' => 'Tunggu 60 detik sebelum meminta OTP lagi.',
@@ -111,6 +134,7 @@ class AuthController extends BaseController
                 $db->table('otp_codes')->where('id', $otpId)->delete();
             }
 
+            $this->logOtpDelivery($phone, 'failed', 'Pengiriman WhatsApp gagal: ' . substr($e->getMessage(), 0, 170));
             log_message('error', 'GOWA OTP delivery error: {error}', [
                 'error' => $e->getMessage(),
             ]);
@@ -120,6 +144,8 @@ class AuthController extends BaseController
                 'message' => 'Gagal mengirim OTP melalui WhatsApp. Silakan coba lagi.',
             ], 503);
         }
+
+        $this->logOtpDelivery($phone, 'sent', 'OTP berhasil dikirim melalui WhatsApp.');
 
         return $this->json([
             'success' => true,
