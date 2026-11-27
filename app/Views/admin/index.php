@@ -401,8 +401,11 @@ async function checkNewWaPairing(){
   const device=(d.devices||[]).find(x=>x.id===newWaPairDeviceId);
   if(device && String(device.state).toLowerCase()==='logged_in'){
    stopNewWaPairing();
-   $('newWaDeviceMsg').textContent='Berhasil! Device '+newWaPairDeviceId+' sudah login dan tersedia di daftar device.';
-   $('newWaQrCountdown').textContent='Pairing berhasil.';
+   $('newWaDeviceMsg').textContent='Berhasil! Device '+newWaPairDeviceId+' sudah login. QR pairing telah ditutup dan tidak dapat digunakan kembali selama sesi ini aktif.';
+   $('newWaQrImage').removeAttribute('src');
+   $('newWaQrImage').hidden=true;
+   $('refreshNewWaQr').hidden=true;
+   $('newWaQrCountdown').textContent='Pairing selesai. Untuk memasangkan ulang, logout sesi device ini terlebih dahulu.';
    await loadWaDevices();
    return;
   }
@@ -430,6 +433,8 @@ async function createNewWaDevice(){
   });
   newWaPairDeviceId=created.deviceId;
   $('newWaDeviceId').textContent='Device ID: '+newWaPairDeviceId;
+  $('newWaQrImage').hidden=false;
+  $('refreshNewWaQr').hidden=false;
   $('newWaQrPanel').hidden=false;
   await requestNewWaQr();
   newWaPairTimer=setInterval(checkNewWaPairing,5000);
