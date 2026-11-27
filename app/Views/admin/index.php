@@ -380,6 +380,7 @@ async function init(){
  $('newUsername').value=d.admin?.username||'';
  await loadSettings();
  await loadWaDevices();
+ await loadOtpDeliveryLogs();
 }
 
 
