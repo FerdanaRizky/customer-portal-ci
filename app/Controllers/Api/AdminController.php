@@ -548,7 +548,12 @@ class AdminController extends BaseController
         }
 
         $data = $this->request->getJSON(true) ?: $this->request->getPost();
+        $deviceId = trim((string) ($data['deviceId'] ?? ''));
         $phone = trim((string) ($data['phone'] ?? ''));
+
+        if (!preg_match('/^portal-[a-f0-9]{16}$/', $deviceId)) {
+            return $this->json(['success' => false, 'message' => 'ID device Portal tidak valid. Buat satu device terlebih dahulu.'], 422);
+        }
 
         try {
             $gateway = new WhatsappGateway();
@@ -557,28 +562,12 @@ class AdminController extends BaseController
                     && strtolower($device['state']) === 'logged_in') {
                     return $this->json([
                         'success' => false,
-                        'message' => 'Sesi WhatsApp Customer Portal masih aktif. Hapus sesi tersebut sebelum membuat pairing baru.',
+                        'message' => 'Sesi WhatsApp Customer Portal masih aktif. Hapus sesi tersebut sebelum pairing baru.',
                     ], 422);
                 }
             }
 
-            $deviceId = 'portal-' . bin2hex(random_bytes(8));
-            $gateway->createPortalDevice($deviceId);
-            try {
-                $pairing = $gateway->requestPairCode($deviceId, $phone);
-            } catch (\Throwable $e) {
-                // Bersihkan slot yang baru dibuat jika GOWA gagal menerbitkan pairing code.
-                try {
-                    $gateway->deletePortalDevice($deviceId);
-                } catch (\Throwable $cleanupError) {
-                    log_message('error', 'Failed to clean up unused Portal device {device}: {error}', [
-                        'device' => $deviceId,
-                        'error' => $cleanupError->getMessage(),
-                    ]);
-                }
-                throw $e;
-            }
-
+            $pairing = $gateway->requestPairCode($deviceId, $phone);
             (new PortalModel())->log('whatsapp.device_pair_code_requested', session('admin.username'), [
                 'deviceId' => $deviceId,
                 'phoneSuffix' => substr($pairing['phone'], -4),
@@ -588,9 +577,9 @@ class AdminController extends BaseController
                 'success' => true,
                 'deviceId' => $deviceId,
                 'pairCode' => $pairing['pairCode'],
-                'message' => 'Kode pairing berhasil dibuat. Masukkan kode tersebut di WhatsApp pada ponsel.',
+                'message' => 'Kode pairing berhasil dibuat untuk device yang sama. Masukkan kode tersebut di WhatsApp pada ponsel.',
             ]);
-        } catch (\Throwable $e) {
+        } catch (\\Throwable $e) {
             return $this->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
     }
