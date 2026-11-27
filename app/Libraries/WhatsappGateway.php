@@ -65,9 +65,18 @@ class WhatsappGateway
 
         $digits = preg_replace('/[^0-9]/', '', $phone);
 
-        if ($digits === '') {
+        if (strlen($digits) < 9 || strlen($digits) > 15) {
             throw new \InvalidArgumentException(
-                'Nomor WhatsApp penerima tidak valid.'
+                'Nomor WhatsApp penerima tidak valid. Gunakan 9 sampai 15 digit termasuk kode negara.'
+            );
+        }
+
+        // Jangan mengirim pesan melalui device yang belum login atau terputus.
+        // Pemeriksaan memakai device yang sedang dipilih di Pengaturan Portal.
+        $deviceStatus = $this->status();
+        if (empty($deviceStatus['loggedIn'])) {
+            throw new \RuntimeException(
+                'Device WhatsApp aktif Portal belum login atau terputus. Periksa status device di Admin sebelum mengirim pesan.'
             );
         }
 
