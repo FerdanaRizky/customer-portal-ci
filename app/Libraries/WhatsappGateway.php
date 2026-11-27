@@ -393,7 +393,7 @@ class WhatsappGateway
             }
         }
         if (!$known) {
-            throw new \\RuntimeException('Device Portal tidak ditemukan di GOWA.');
+            throw new \RuntimeException('Device Portal tidak ditemukan di GOWA.');
         }
 
         $statusUrl = $config['baseURL'] . '/devices/' . rawurlencode($deviceId) . '/status';
