@@ -66,8 +66,9 @@ class AuthController extends BaseController
         if (!$device || empty($device['_id'])) {
             return $this->json([
                 'success' => false,
-                'message' => 'Nomor belum terdaftar di GenieACS.',
-            ], 404);
+                'code' => 'CUSTOMER_NOT_FOUND',
+                'message' => 'Nomor WhatsApp atau data yang Anda masukkan tidak ditemukan. Harap periksa kembali nomor WhatsApp yang terdaftar.',
+            ], 422);
         }
 
         $db = db_connect();
