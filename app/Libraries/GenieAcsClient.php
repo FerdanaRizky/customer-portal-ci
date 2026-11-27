@@ -105,7 +105,7 @@ class GenieAcsClient
         ));
 
         if (count($matches) > 1) {
-            throw new RuntimeException(
+            throw new \\RuntimeException(
                 'Nomor WhatsApp memiliki lebih dari satu pemetaan perangkat di GenieACS.'
             );
         }
