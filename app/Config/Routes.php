@@ -42,4 +42,5 @@ $routes->group('api', static function (RouteCollection $routes): void {
     $routes->post('admin/whatsapp/select', 'Api\\AdminController::whatsappSelectDevice');
     $routes->get('admin/whatsapp/status', 'Api\\AdminController::whatsappStatus');
     $routes->post('admin/whatsapp/qr', 'Api\\AdminController::whatsappQr');
+    $routes->post('admin/whatsapp/pair-code', 'Api\\AdminController::whatsappPairCode');
 });
