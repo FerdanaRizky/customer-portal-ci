@@ -23,8 +23,8 @@ class AuthController extends BaseController
     private function auditAuth(string $event, string $phone): void
     {
         try {
-            (new \\App\\Models\\PortalModel())->log($event, $phone);
-        } catch (\\Throwable $e) {
+            (new \App\Models\PortalModel())->log($event, $phone);
+        } catch (\Throwable $e) {
             log_message('error', 'Customer auth audit write failed: {error}', [
                 'error' => $e->getMessage(),
             ]);
