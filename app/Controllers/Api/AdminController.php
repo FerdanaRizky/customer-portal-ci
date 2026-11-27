@@ -541,6 +541,60 @@ class AdminController extends BaseController
         }
     }
 
+    public function whatsappPairCode()
+    {
+        if ($r = $this->guard()) {
+            return $r;
+        }
+
+        $data = $this->request->getJSON(true) ?: $this->request->getPost();
+        $phone = trim((string) ($data['phone'] ?? ''));
+
+        try {
+            $gateway = new WhatsappGateway();
+            foreach ($gateway->listDevices() as $device) {
+                if (str_starts_with($device['id'], 'portal-')
+                    && strtolower($device['state']) === 'logged_in') {
+                    return $this->json([
+                        'success' => false,
+                        'message' => 'Sesi WhatsApp Customer Portal masih aktif. Hapus sesi tersebut sebelum membuat pairing baru.',
+                    ], 422);
+                }
+            }
+
+            $deviceId = 'portal-' . bin2hex(random_bytes(8));
+            $gateway->createPortalDevice($deviceId);
+            try {
+                $pairing = $gateway->requestPairCode($deviceId, $phone);
+            } catch (\\Throwable $e) {
+                // Bersihkan slot yang baru dibuat jika GOWA gagal menerbitkan pairing code.
+                try {
+                    $gateway->deletePortalDevice($deviceId);
+                } catch (\\Throwable $cleanupError) {
+                    log_message('error', 'Failed to clean up unused Portal device {device}: {error}', [
+                        'device' => $deviceId,
+                        'error' => $cleanupError->getMessage(),
+                    ]);
+                }
+                throw $e;
+            }
+
+            (new PortalModel())->log('whatsapp.device_pair_code_requested', session('admin.username'), [
+                'deviceId' => $deviceId,
+                'phoneSuffix' => substr($pairing['phone'], -4),
+            ]);
+
+            return $this->json([
+                'success' => true,
+                'deviceId' => $deviceId,
+                'pairCode' => $pairing['pairCode'],
+                'message' => 'Kode pairing berhasil dibuat. Masukkan kode tersebut di WhatsApp pada ponsel.',
+            ]);
+        } catch (\\Throwable $e) {
+            return $this->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+    }
+
     public function whatsappQr()
     {
         if ($r = $this->guard()) {
