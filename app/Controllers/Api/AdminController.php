@@ -383,22 +383,47 @@ class AdminController extends BaseController
         return $this->json((new WhatsappGateway())->status());
     }
 
-    public function whatsappQr()
+    public function whatsappCreateDevice()
     {
         if ($r = $this->guard()) {
             return $r;
         }
 
         try {
+            $deviceId = 'portal-' . bin2hex(random_bytes(8));
+            $result = (new WhatsappGateway())->createPortalDevice($deviceId);
+            (new PortalModel())->log(
+                'whatsapp.device_created',
+                session('admin.username'),
+                ['deviceId' => $result['deviceId']]
+            );
+
             return $this->json([
                 'success' => true,
-                ...(new WhatsappGateway())->requestQr(),
+                'deviceId' => $result['deviceId'],
+                'message' => 'Slot device Portal berhasil dibuat. Lanjutkan dengan meminta QR.',
             ]);
-        } catch (\Throwable $e) {
+        } catch (\\Throwable $e) {
+            return $this->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+    }
+
+    public function whatsappQr()
+    {
+        if ($r = $this->guard()) {
+            return $r;
+        }
+
+        $data = $this->request->getJSON(true) ?: $this->request->getPost();
+        $deviceId = trim((string) ($data['deviceId'] ?? ''));
+
+        try {
             return $this->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 422);
+                'success' => true,
+                ...(new WhatsappGateway())->requestQr($deviceId),
+            ]);
+        } catch (\\Throwable $e) {
+            return $this->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
     }
 
