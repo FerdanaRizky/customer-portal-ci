@@ -247,6 +247,13 @@ small{color:var(--muted)}
  </section>
 
  <section class="card">
+  <h2>Riwayat Pengiriman OTP WhatsApp</h2>
+  <p class="muted">Menampilkan maksimal 100 percobaan OTP terbaru. Kode OTP tidak pernah disimpan di riwayat.</p>
+  <button class="secondary" id="otpDeliveryLogs">Muat Riwayat OTP</button>
+  <pre id="otpDeliveryLogsResult"></pre>
+ </section>
+
+ <section class="card">
   <h2>Audit Log</h2>
   <button class="secondary" id="logs">Muat Audit Log</button>
   <pre id="logsResult"></pre>
@@ -768,6 +775,21 @@ $('customers').onclick=async()=>{
 $('logs').onclick=async()=>{
  try{$('logsResult').textContent=JSON.stringify(await api('/api/admin/logs'),null,2);}
  catch(e){$('logsResult').textContent=e.message;}
+};
+$('otpDeliveryLogs').onclick=async()=>{
+ try{
+  const data=await api('/api/admin/otp-delivery-logs');
+  const labels={sent:'Berhasil dikirim',failed:'Gagal dikirim',customer_not_found:'Nomor tidak ditemukan',system_error:'Gangguan sistem',rate_limited:'Dibatasi (tunggu 60 detik)'};
+  $('otpDeliveryLogsResult').textContent=data.logs.length
+   ? data.logs.map(item=>[
+      '#'+item.id+' | '+(labels[item.status]||item.status),
+      'Nomor: '+item.phone,
+      'Device: '+(item.device_id||'-'),
+      'Waktu: '+item.created_at,
+      'Keterangan: '+(item.message||'-')
+     ].join('\\n')).join('\\n\\n')
+   : 'Belum ada riwayat pengiriman OTP.';
+ }catch(e){$('otpDeliveryLogsResult').textContent=e.message;}
 };
 $('logout').onclick=async()=>{
  try{await api('/api/admin/auth/logout',{method:'POST'});location.reload();}
