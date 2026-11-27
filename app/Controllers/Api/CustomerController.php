@@ -13,6 +13,51 @@ class CustomerController extends BaseController
     }
 
     /**
+     * Ikat setiap akses API ke kombinasi nomor WhatsApp + device ID
+     * yang diverifikasi saat OTP. Jika tag berubah atau device dihapus,
+     * sesi lokal langsung dicabut.
+     */
+    private function validateCustomerMapping(array $customer)
+    {
+        $phone = (string) ($customer['phone'] ?? '');
+        $deviceId = (string) ($customer['deviceId'] ?? '');
+
+        if ($phone === '' || $deviceId === '') {
+            session()->remove('customer');
+            return $this->json([
+                'success' => false,
+                'message' => 'Sesi pelanggan tidak valid. Silakan login kembali dengan OTP.',
+            ], 401);
+        }
+
+        try {
+            $device = $this->client()->findDeviceByIdAndPhone($deviceId, $phone);
+        } catch (\\Throwable $e) {
+            log_message('error', 'Customer mapping validation failed: {error}', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->json([
+                'success' => false,
+                'message' => 'Belum dapat memeriksa data perangkat di GenieACS. Silakan coba lagi.',
+            ], 503);
+        }
+
+        if (!$device) {
+            session()->remove('customer');
+            session()->regenerate(true);
+
+            return $this->json([
+                'success' => false,
+                'message' => 'Perangkat atau hubungan nomor WhatsApp sudah tidak ditemukan di GenieACS. Silakan login kembali setelah data diperbaiki.',
+                'code' => 'CUSTOMER_DEVICE_NOT_FOUND',
+            ], 401);
+        }
+
+        return null;
+    }
+
+    /**
      * Mengambil nilai _value dari parameter GenieACS.
      */
     private function parameterValue(array $data, array $path, $default = null)
@@ -38,12 +83,18 @@ class CustomerController extends BaseController
     {
         $customer = $this->requireCustomer();
 
-        return $customer
-            ? $this->json([
+        if (!$customer) {
+            return $this->json(['success' => false], 401);
+        }
+
+        if ($guard = $this->validateCustomerMapping($customer)) {
+            return $guard;
+        }
+
+        return $this->json([
                 'success' => true,
                 'customer' => $customer,
-            ])
-            : $this->json(['success' => false], 401);
+            ]);
     }
 
     public function device()
@@ -52,6 +103,10 @@ class CustomerController extends BaseController
 
         if (!$customer) {
             return $this->json(['success' => false], 401);
+        }
+
+        if ($guard = $this->validateCustomerMapping($customer)) {
+            return $guard;
         }
 
         $deviceId = (string) ($customer['deviceId'] ?? '');
