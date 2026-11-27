@@ -372,6 +372,82 @@ class WhatsappGateway
      * Tidak pernah menjalankan login/QR untuk device billing atau device lain.
      */
     /**
+     * Meminta kode pairing WhatsApp untuk nomor telepon pada device Portal.
+     */
+    public function requestPairCode(string $deviceId, string $phone): array
+    {
+        if (!preg_match('/^portal-[a-f0-9]{16}$/', $deviceId)) {
+            throw new \\InvalidArgumentException('Pairing code hanya diizinkan untuk device milik Portal.');
+        }
+
+        $phone = preg_replace('/\\D+/', '', $phone);
+        if (str_starts_with($phone, '0')) {
+            $phone = '62' . substr($phone, 1);
+        }
+        if (!preg_match('/^[1-9][0-9]{7,14}$/', $phone)) {
+            throw new \\InvalidArgumentException('Nomor WhatsApp tidak valid. Gunakan kode negara, contoh 6281234567890.');
+        }
+
+        $config = $this->config();
+        if ($config['baseURL'] === '' || empty($config['username']) || empty($config['password'])) {
+            throw new \\RuntimeException('Konfigurasi GOWA belum lengkap.');
+        }
+
+        $known = false;
+        foreach ($this->listDevices() as $device) {
+            if (hash_equals($device['id'], $deviceId)) {
+                $known = true;
+                if (strtolower($device['state']) === 'logged_in') {
+                    throw new \\RuntimeException('Sesi WhatsApp device ini sudah login. Hapus sesi terlebih dahulu sebelum pairing ulang.');
+                }
+                break;
+            }
+        }
+        if (!$known) {
+            throw new \\RuntimeException('Device Portal tidak ditemukan di GOWA.');
+        }
+
+        $url = $config['baseURL'] . '/devices/' . rawurlencode($deviceId)
+            . '/login/code?phone=' . rawurlencode($phone);
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => '',
+            CURLOPT_CONNECTTIMEOUT => 8,
+            CURLOPT_TIMEOUT => 20,
+            CURLOPT_USERPWD => $config['username'] . ':' . $config['password'],
+            CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
+            CURLOPT_HTTPHEADER => [
+                'Accept: application/json',
+                'X-Device-Id: ' . $deviceId,
+            ],
+        ]);
+
+        $body = curl_exec($ch);
+        $http = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($body === false || $http < 200 || $http >= 300) {
+            log_message('error', 'GOWA pairing-code request failed. HTTP {status}; {error}', [
+                'status' => $http,
+                'error' => $error,
+            ]);
+            throw new \\RuntimeException('GOWA gagal membuat kode pairing (HTTP ' . $http . ').');
+        }
+
+        $data = json_decode((string) $body, true);
+        $results = is_array($data['results'] ?? null) ? $data['results'] : [];
+        $pairCode = trim((string) ($results['pair_code'] ?? ''));
+        if (!is_array($data) || strtoupper((string) ($data['code'] ?? '')) !== 'SUCCESS' || $pairCode === '') {
+            throw new \\RuntimeException((string) ($data['message'] ?? 'Respons kode pairing GOWA tidak valid.'));
+        }
+
+        return ['pairCode' => $pairCode, 'phone' => $phone];
+    }
+
+    /**
      * Menghapus device khusus Customer Portal dari GOWA.
      * Device non-Portal (termasuk billing) tidak boleh dihapus melalui method ini.
      */
