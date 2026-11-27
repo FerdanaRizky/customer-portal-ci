@@ -10,7 +10,14 @@ class AuthController extends BaseController
 {
     private function normalizePhone(array $data): string
     {
-        return preg_replace('/[^0-9]/', '', (string) ($data['phone'] ?? ''));
+        $phone = preg_replace('/[^0-9]/', '', (string) ($data['phone'] ?? ''));
+
+        // Terima format lokal 08xxxxxxxxxx dan simpan/cari dengan format internasional 628xxxxxxxxxx.
+        if (str_starts_with($phone, '0')) {
+            $phone = '62' . substr($phone, 1);
+        }
+
+        return $phone;
     }
 
     private function findCustomerDevice(string $phone): ?array
