@@ -12,6 +12,21 @@ class CustomerController extends BaseController
         return new GenieAcsClient();
     }
 
+    private function auditCustomer(string $event, array $customer, array $detail = []): void
+    {
+        try {
+            (new \\App\\Models\\PortalModel())->log(
+                $event,
+                (string) ($customer['phone'] ?? 'customer'),
+                ['deviceId' => (string) ($customer['deviceId'] ?? ''), ...$detail]
+            );
+        } catch (\\Throwable $e) {
+            log_message('error', 'Customer audit write failed: {error}', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
     /**
      * Ikat setiap akses API ke kombinasi nomor WhatsApp + device ID
      * yang diverifikasi saat OTP. Jika tag berubah atau device dihapus,
@@ -334,6 +349,12 @@ class CustomerController extends BaseController
                 [[$path, $value, 'xsd:string']]
             );
 
+            // Jangan simpan nilai SSID/password ke audit log.
+            $this->auditCustomer('customer.wifi_parameter_update_requested', $customer, [
+                'parameter' => $parameter,
+                'index' => $index,
+            ]);
+
             return $this->json([
                 'success' => true,
                 'message' => 'Perintah konfigurasi dikirim.',
@@ -373,6 +394,7 @@ class CustomerController extends BaseController
 
         try {
             $this->client()->command($deviceId, 'reboot');
+            $this->auditCustomer('customer.device_reboot_requested', $customer);
 
             return $this->json([
                 'success' => true,
