@@ -1,11 +1,64 @@
-<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Login Pelanggan</title><style>:root{--bg:#0A1120;--surface:#121B2E;--border:#223252;--teal:#16C4B0;--blue:#3B82F6;--text:#E7EEF7;--muted:#8A99B5}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;background:radial-gradient(ellipse at 15% 0,#0F3D3A,transparent 55%),var(--bg);color:var(--text);font:15px system-ui}.card{width:min(100%,410px);background:var(--surface);border:1px solid #1B2740;border-radius:20px;padding:34px}.brand{text-align:center;margin-bottom:25px;font-size:27px;font-weight:800}p{color:var(--muted);line-height:1.6}label{display:block;margin:18px 0 8px;color:var(--muted);font-size:12px;font-weight:700}input{width:100%;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);font-size:16px}button{width:100%;margin-top:18px;border:0;border-radius:10px;padding:14px;background:linear-gradient(135deg,var(--teal),var(--blue));font-weight:800;cursor:pointer}.msg{min-height:22px;color:#f87171;margin-top:10px}</style></head><body><main class="card"><div class="brand" id="brand">Pesona Wifi</div><h2>Login Pelanggan</h2><p>Masukkan nomor WhatsApp untuk menerima kode OTP.</p><form id="f"><section id="phoneStep"><label>Nomor WhatsApp</label><input id="phone" type="tel" placeholder="08xxxxxxxxxx" required></section><section id="otpStep" hidden><label>Kode OTP</label><input id="otp" inputmode="numeric" maxlength="6" autocomplete="one-time-code"></section><button id="submit">Minta OTP</button><div class="msg" id="msg"></div></form></main><script>const $=x=>document.getElementById(x);let csrfHash=null;
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Login Pelanggan</title><style>:root{--bg:#0A1120;--surface:#121B2E;--border:#223252;--teal:#16C4B0;--blue:#3B82F6;--text:#E7EEF7;--muted:#8A99B5}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;background:radial-gradient(ellipse at 15% 0,#0F3D3A,transparent 55%),var(--bg);color:var(--text);font:15px system-ui}.card{width:min(100%,410px);background:var(--surface);border:1px solid #1B2740;border-radius:20px;padding:34px}.brand{text-align:center;margin-bottom:25px;font-size:27px;font-weight:800}p{color:var(--muted);line-height:1.6}label{display:block;margin:18px 0 8px;color:var(--muted);font-size:12px;font-weight:700}input{width:100%;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);font-size:16px}button{width:100%;margin-top:18px;border:0;border-radius:10px;padding:14px;background:linear-gradient(135deg,var(--teal),var(--blue));font-weight:800;cursor:pointer}.msg{min-height:22px;color:#f87171;margin-top:10px}</style></head><body><main class="card"><div class="brand" id="brand">Pesona Wifi</div><h2>Login Pelanggan</h2><p>Masukkan nomor WhatsApp untuk menerima kode OTP.</p><form id="f"><section id="phoneStep"><label>Nomor WhatsApp</label><input id="phone" type="tel" placeholder="08xxxxxxxxxx" required></section><section id="otpStep" hidden><label>Kode OTP</label><input id="otp" inputmode="numeric" maxlength="6" autocomplete="one-time-code"></section><button id="submit">Minta OTP</button><div class="msg" id="msg"></div></form></main><script>
+const $=x=>document.getElementById(x);
+let csrfHash=null;
+async function readApiResponse(response){
+    const body=await response.text();
+    let data;
+    try {
+        data=JSON.parse(body);
+    } catch (_) {
+        console.error('API returned non-JSON response', response.status, body.slice(0,500));
+        if(response.status===403) throw Error('Permintaan ditolak oleh keamanan server. Muat ulang halaman lalu coba lagi.');
+        if(response.status>=500) throw Error('Server sedang mengalami gangguan (HTTP '+response.status+'). Silakan coba lagi atau hubungi administrator.');
+        throw Error('Respons server tidak valid (HTTP '+response.status+'). Muat ulang halaman dan coba lagi.');
+    }
+    if(!response.ok && (!data || typeof data!=='object')) {
+        throw Error('Permintaan gagal (HTTP '+response.status+').');
+    }
+    return data;
+}
 async function getCsrfHash(){
     if(!csrfHash){
-        const r=await fetch('/api/config');
-        const d=await r.json();
-        if(!r.ok || !d.csrfHash) throw Error('Gagal mengambil token keamanan.');
-        csrfHash=d.csrfHash;
+        const response=await fetch('/api/config',{headers:{'Accept':'application/json'}});
+        const data=await readApiResponse(response);
+        if(!response.ok || !data.csrfHash) throw Error('Gagal mengambil token keamanan. Muat ulang halaman.');
+        csrfHash=data.csrfHash;
     }
     return csrfHash;
 }
-let stage=0;$('f').onsubmit=async e=>{e.preventDefault();$('submit').disabled=true;try{let d=await fetch(stage?'/api/auth/verify-otp':'/api/auth/request-otp',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-TOKEN':await getCsrfHash()},body:JSON.stringify({phone:$('phone').value,otp:$('otp').value})}).then(r=>r.json());if(!d.success)throw Error(d.message||'Gagal');if(!stage){stage=1;$('phoneStep').hidden=true;$('otpStep').hidden=false;$('submit').textContent='Verifikasi OTP';$('msg').textContent=d.message}else location.href=d.redirect||'/dashboard'}catch(e){$('msg').textContent=e.message}finally{$('submit').disabled=false}};fetch('/api/config').then(r=>r.json()).then(d=>$('brand').textContent=d.appName||'Pesona Wifi');</script></body></html>
+let stage=0;
+$('f').onsubmit=async e=>{
+    e.preventDefault();
+    $('submit').disabled=true;
+    try{
+        const response=await fetch(stage?'/api/auth/verify-otp':'/api/auth/request-otp',{
+            method:'POST',
+            headers:{
+                'Content-Type':'application/json',
+                'Accept':'application/json',
+                'X-CSRF-TOKEN':await getCsrfHash()
+            },
+            body:JSON.stringify({phone:$('phone').value,otp:$('otp').value})
+        });
+        const data=await readApiResponse(response);
+        if(!data.success) throw Error(data.message||'Permintaan gagal. Periksa nomor WhatsApp.');
+        if(!stage){
+            stage=1;
+            $('phoneStep').hidden=true;
+            $('otpStep').hidden=false;
+            $('submit').textContent='Verifikasi OTP';
+            $('msg').textContent=data.message||'OTP dikirim ke WhatsApp.';
+        }else{
+            location.href=data.redirect||'/dashboard';
+        }
+    }catch(error){
+        $('msg').textContent=error.message||'Terjadi kesalahan. Silakan coba lagi.';
+    }finally{
+        $('submit').disabled=false;
+    }
+};
+fetch('/api/config',{headers:{'Accept':'application/json'}})
+    .then(readApiResponse)
+    .then(data=>$('brand').textContent=data.appName||'Pesona Wifi')
+    .catch(error=>console.error('Portal config:',error));
+</script></body></html>
