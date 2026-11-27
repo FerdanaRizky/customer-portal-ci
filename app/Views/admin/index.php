@@ -249,7 +249,7 @@ small{color:var(--muted)}
  <section class="card">
   <h2>Riwayat Pengiriman OTP WhatsApp</h2>
   <p class="muted">Menampilkan maksimal 100 percobaan OTP terbaru. Kode OTP tidak pernah disimpan di riwayat.</p>
-  <div class="grid">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:14px 0">
    <div>
     <label for="otpLogFrom">Dari tanggal</label>
     <input type="date" id="otpLogFrom">
@@ -814,13 +814,13 @@ async function loadOtpDeliveryLogs(){
   const data=await api('/api/admin/otp-delivery-logs'+(query?'?'+query:''));
   const labels={sent:'Berhasil dikirim',failed:'Gagal dikirim',customer_not_found:'Nomor tidak ditemukan',system_error:'Gangguan sistem',rate_limited:'Dibatasi (tunggu 60 detik)'};
   $('otpDeliveryLogsResult').textContent=data.logs.length
-   ? 'Ditemukan '+data.count+' riwayat (maksimal 100 terbaru).\\n\\n'+data.logs.map(item=>[
+   ? 'Ditemukan '+data.count+' riwayat (maksimal 100 terbaru).\n\n'+data.logs.map(item=>[
       '#'+item.id+' | '+(labels[item.status]||item.status),
       'Nomor: '+item.phone,
       'Device: '+(item.device_id||'-'),
       'Waktu: '+item.created_at,
       'Keterangan: '+(item.message||'-')
-     ].join('\\n')).join('\\n\\n')
+     ].join('\n')).join('\n\n')
    : 'Tidak ada riwayat OTP yang sesuai dengan filter.';
  }catch(e){$('otpDeliveryLogsResult').textContent=e.message;}
 }
