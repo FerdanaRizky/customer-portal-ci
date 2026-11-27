@@ -23,6 +23,11 @@ class App extends BaseConfig
     public string $charset = 'UTF-8';
     public bool $forceGlobalSecureRequests = false;
 
+    /** Session and cookie hardening for the HTTPS customer portal. */
+    public bool $cookieSecure = true;
+    public bool $cookieHTTPOnly = true;
+    public string $cookieSameSite = 'Lax';
+
     /**
      * Trusted reverse proxies and their client IP headers.
      *
