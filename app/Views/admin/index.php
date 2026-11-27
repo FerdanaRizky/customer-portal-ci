@@ -27,7 +27,22 @@ input[type=text],input[type=url],input[type=password],input[type=number]{
  display:block;width:100%;padding:12px;background:var(--bg);
  border:1px solid var(--border);border-radius:9px;color:var(--text);outline:none
 }
-input:focus{border-color:var(--accent)}
+input[type=date],select{
+ display:block;width:100%;min-width:0;padding:12px;background:var(--bg);
+ border:1px solid var(--border);border-radius:9px;color:var(--text);
+ color-scheme:dark;outline:none
+}
+input:focus,select:focus{border-color:var(--accent)}
+.otp-table-wrap{width:100%;overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin-top:14px}
+.otp-table{width:100%;border-collapse:collapse;min-width:720px;font-size:13px}
+.otp-table th,.otp-table td{padding:11px 12px;text-align:left;border-bottom:1px solid var(--border);vertical-align:top}
+.otp-table th{background:var(--surface2);color:var(--muted);font-weight:700;white-space:nowrap}
+.otp-table tr:last-child td{border-bottom:0}
+.otp-table td{overflow-wrap:anywhere}
+.otp-status{display:inline-block;padding:4px 9px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap}
+.otp-status.ok{background:#14532d;color:#bbf7d0}
+.otp-status.fail{background:#7f1d1d;color:#fecaca}
+.otp-empty{padding:16px;color:var(--muted);text-align:center}
 button{border:0;border-radius:9px;padding:11px 16px;background:var(--accent);
  color:#07111f;font-weight:700;cursor:pointer}
 button:disabled{opacity:.5;cursor:not-allowed}
@@ -273,7 +288,7 @@ small{color:var(--muted)}
   </div>
   <button class="secondary" id="otpDeliveryLogs">Terapkan Filter</button>
   <button class="secondary" id="otpLogReset">Reset Filter</button>
-  <pre id="otpDeliveryLogsResult"></pre>
+  <div id="otpDeliveryLogsResult" aria-live="polite"></div>
  </section>
 
  <section class="card">
@@ -799,7 +814,14 @@ $('logs').onclick=async()=>{
  try{$('logsResult').textContent=JSON.stringify(await api('/api/admin/logs'),null,2);}
  catch(e){$('logsResult').textContent=e.message;}
 };
+function escapeOtpHtml(value){
+ return String(value??'').replace(/[&<>"']/g,char=>({
+  '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+ }[char]));
+}
 async function loadOtpDeliveryLogs(){
+ const result=$('otpDeliveryLogsResult');
+ result.innerHTML='<p class="muted">Memuat riwayat OTP...</p>';
  try{
   const params=new URLSearchParams();
   const from=$('otpLogFrom').value;
@@ -812,17 +834,30 @@ async function loadOtpDeliveryLogs(){
   if(status) params.set('status',status);
   const query=params.toString();
   const data=await api('/api/admin/otp-delivery-logs'+(query?'?'+query:''));
-  const labels={sent:'Berhasil dikirim',failed:'Gagal dikirim',customer_not_found:'Nomor tidak ditemukan',system_error:'Gangguan sistem',rate_limited:'Dibatasi (tunggu 60 detik)'};
-  $('otpDeliveryLogsResult').textContent=data.logs.length
-   ? 'Ditemukan '+data.count+' riwayat (maksimal 100 terbaru).\n\n'+data.logs.map(item=>[
-      '#'+item.id+' | '+(labels[item.status]||item.status),
-      'Nomor: '+item.phone,
-      'Device: '+(item.device_id||'-'),
-      'Waktu: '+item.created_at,
-      'Keterangan: '+(item.message||'-')
-     ].join('\n')).join('\n\n')
-   : 'Tidak ada riwayat OTP yang sesuai dengan filter.';
- }catch(e){$('otpDeliveryLogsResult').textContent=e.message;}
+  const labels={sent:'Berhasil',failed:'Gagal',customer_not_found:'Nomor tidak ditemukan',system_error:'Gangguan sistem',rate_limited:'Dibatasi'};
+  if(!data.logs.length){
+   result.innerHTML='<div class="otp-empty">Tidak ada riwayat OTP yang sesuai dengan filter.</div>';
+   return;
+  }
+  const rows=data.logs.map(item=>{
+   const success=item.status==='sent';
+   const statusLabel=labels[item.status]||item.status;
+   return '<tr>'+
+    '<td>#'+escapeOtpHtml(item.id)+'</td>'+
+    '<td><span class="otp-status '+(success?'ok':'fail')+'">'+escapeOtpHtml(statusLabel)+'</span></td>'+
+    '<td>'+escapeOtpHtml(item.phone)+'</td>'+
+    '<td>'+escapeOtpHtml(item.device_id||'-')+'</td>'+
+    '<td>'+escapeOtpHtml(item.created_at)+'</td>'+
+    '<td>'+escapeOtpHtml(item.message||'-')+'</td>'+
+   '</tr>';
+  }).join('');
+  result.innerHTML='<p class="muted">Ditemukan '+escapeOtpHtml(data.count)+' riwayat (maksimal 100 terbaru).</p>'+
+   '<div class="otp-table-wrap"><table class="otp-table">'+
+    '<thead><tr><th>ID</th><th>Status</th><th>Nomor WhatsApp</th><th>Device</th><th>Waktu</th><th>Keterangan</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table></div>';
+ }catch(e){
+  result.textContent=e.message;
+ }
 }
 $('otpDeliveryLogs').onclick=loadOtpDeliveryLogs;
 $('otpLogReset').onclick=()=>{
