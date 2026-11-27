@@ -460,7 +460,7 @@ class AdminController extends BaseController
                 'success' => true,
                 'message' => 'Device dipulihkan ke daftar Customer Portal. Sesi GOWA tidak diubah.',
             ]);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             return $this->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
     }
