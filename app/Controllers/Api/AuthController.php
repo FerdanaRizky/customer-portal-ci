@@ -115,7 +115,6 @@ class AuthController extends BaseController
 
         $db = db_connect();
         $now = date('Y-m-d H:i:s');
-        $ipAddress = $this->request->getIPAddress();
 
         // Batasi pengiriman per nomor, termasuk setelah OTP lama berhasil dipakai.
         $recentPhoneRequest = $db->table('otp_delivery_logs')
@@ -129,21 +128,6 @@ class AuthController extends BaseController
             return $this->json([
                 'success' => false,
                 'message' => 'Tunggu 60 detik sebelum meminta OTP lagi.',
-            ], 429);
-        }
-
-        // Batasi penyalahgunaan dari satu alamat IP: maksimal 20 permintaan dalam 15 menit.
-        $recentIpRequests = $db->table('otp_delivery_logs')
-            ->where('ip_address', $ipAddress)
-            ->where('created_at >', date('Y-m-d H:i:s', time() - 900))
-            ->countAllResults();
-
-        if ($recentIpRequests >= 20) {
-            $this->logOtpDelivery($phone, 'rate_limited', 'Batas permintaan OTP dari alamat IP tercapai.');
-            return $this->json([
-                'success' => false,
-                'code' => 'OTP_IP_RATE_LIMITED',
-                'message' => 'Terlalu banyak permintaan OTP dari jaringan Anda. Silakan coba kembali beberapa menit lagi.',
             ], 429);
         }
 
