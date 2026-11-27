@@ -564,7 +564,7 @@ class AdminController extends BaseController
                 'reused' => false,
                 'message' => 'Slot device Portal berhasil dibuat satu kali. Pilih metode pairing.',
             ]);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             return $this->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
     }
