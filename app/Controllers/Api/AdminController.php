@@ -320,6 +320,21 @@ class AdminController extends BaseController
     }
 
 
+    public function otpDeliveryLogs()
+    {
+        if ($r = $this->guard()) {
+            return $r;
+        }
+
+        return $this->json([
+            'success' => true,
+            'logs' => db_connect()->table('otp_delivery_logs')
+                ->orderBy('id', 'DESC')
+                ->limit(100)
+                ->get()->getResultArray(),
+        ]);
+    }
+
     public function whatsappDevices()
     {
         if ($r = $this->guard()) {
