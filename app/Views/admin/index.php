@@ -787,7 +787,7 @@ $('otpDeliveryLogs').onclick=async()=>{
       'Device: '+(item.device_id||'-'),
       'Waktu: '+item.created_at,
       'Keterangan: '+(item.message||'-')
-     ].join('\\n')).join('\\n\\n')
+     ].join('\n')).join('\n\n')
    : 'Belum ada riwayat pengiriman OTP.';
  }catch(e){$('otpDeliveryLogsResult').textContent=e.message;}
 };
