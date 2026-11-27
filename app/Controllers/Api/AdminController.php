@@ -319,6 +319,61 @@ class AdminController extends BaseController
         ]);
     }
 
+
+    public function whatsappDevices()
+    {
+        if ($r = $this->guard()) {
+            return $r;
+        }
+
+        try {
+            $devices = (new WhatsappGateway())->listDevices();
+            $selected = (new PortalModel())->setting('gowa_device_id', 'billing');
+            return $this->json([
+                'success' => true,
+                'devices' => $devices,
+                'selectedDeviceId' => $selected,
+            ]);
+        } catch (\Throwable $e) {
+            return $this->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    public function whatsappSelectDevice()
+    {
+        if ($r = $this->guard()) {
+            return $r;
+        }
+
+        $data = $this->request->getJSON(true) ?: $this->request->getPost();
+        $deviceId = trim((string) ($data['deviceId'] ?? ''));
+        if ($deviceId === '') {
+            return $this->json(['success' => false, 'message' => 'Pilih device WhatsApp terlebih dahulu.'], 422);
+        }
+
+        try {
+            $devices = (new WhatsappGateway())->listDevices();
+            $exists = false;
+            foreach ($devices as $device) {
+                if (hash_equals($device['id'], $deviceId)) {
+                    $exists = true;
+                    break;
+                }
+            }
+
+            if (!$exists) {
+                return $this->json(['success' => false, 'message' => 'Device tidak ditemukan di GOWA. Muat ulang daftar device.'], 422);
+            }
+
+            (new PortalModel())->saveSetting('gowa_device_id', $deviceId);
+            (new PortalModel())->log('whatsapp.device_selected', session('admin.username'), ['deviceId' => $deviceId]);
+
+            return $this->json(['success' => true, 'selectedDeviceId' => $deviceId]);
+        } catch (\Throwable $e) {
+            return $this->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
     public function whatsappStatus()
     {
         if ($r = $this->guard()) {
