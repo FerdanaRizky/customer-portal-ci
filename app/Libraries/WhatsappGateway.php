@@ -377,7 +377,7 @@ class WhatsappGateway
     public function requestPairCode(string $deviceId, string $phone): array
     {
         if (!preg_match('/^portal-[a-f0-9]{16}$/', $deviceId)) {
-            throw new \\InvalidArgumentException('Pairing code hanya diizinkan untuk device milik Portal.');
+            throw new \InvalidArgumentException('Pairing code hanya diizinkan untuk device milik Portal.');
         }
 
         $phone = preg_replace('/\\D+/', '', $phone);
@@ -385,12 +385,12 @@ class WhatsappGateway
             $phone = '62' . substr($phone, 1);
         }
         if (!preg_match('/^[1-9][0-9]{7,14}$/', $phone)) {
-            throw new \\InvalidArgumentException('Nomor WhatsApp tidak valid. Gunakan kode negara, contoh 6281234567890.');
+            throw new \InvalidArgumentException('Nomor WhatsApp tidak valid. Gunakan kode negara, contoh 6281234567890.');
         }
 
         $config = $this->config();
         if ($config['baseURL'] === '' || empty($config['username']) || empty($config['password'])) {
-            throw new \\RuntimeException('Konfigurasi GOWA belum lengkap.');
+            throw new \RuntimeException('Konfigurasi GOWA belum lengkap.');
         }
 
         $known = false;
@@ -398,13 +398,13 @@ class WhatsappGateway
             if (hash_equals($device['id'], $deviceId)) {
                 $known = true;
                 if (strtolower($device['state']) === 'logged_in') {
-                    throw new \\RuntimeException('Sesi WhatsApp device ini sudah login. Hapus sesi terlebih dahulu sebelum pairing ulang.');
+                    throw new \RuntimeException('Sesi WhatsApp device ini sudah login. Hapus sesi terlebih dahulu sebelum pairing ulang.');
                 }
                 break;
             }
         }
         if (!$known) {
-            throw new \\RuntimeException('Device Portal tidak ditemukan di GOWA.');
+            throw new \RuntimeException('Device Portal tidak ditemukan di GOWA.');
         }
 
         $url = $config['baseURL'] . '/devices/' . rawurlencode($deviceId)
@@ -434,14 +434,14 @@ class WhatsappGateway
                 'status' => $http,
                 'error' => $error,
             ]);
-            throw new \\RuntimeException('GOWA gagal membuat kode pairing (HTTP ' . $http . ').');
+            throw new \RuntimeException('GOWA gagal membuat kode pairing (HTTP ' . $http . ').');
         }
 
         $data = json_decode((string) $body, true);
         $results = is_array($data['results'] ?? null) ? $data['results'] : [];
         $pairCode = trim((string) ($results['pair_code'] ?? ''));
         if (!is_array($data) || strtoupper((string) ($data['code'] ?? '')) !== 'SUCCESS' || $pairCode === '') {
-            throw new \\RuntimeException((string) ($data['message'] ?? 'Respons kode pairing GOWA tidak valid.'));
+            throw new \RuntimeException((string) ($data['message'] ?? 'Respons kode pairing GOWA tidak valid.'));
         }
 
         return ['pairCode' => $pairCode, 'phone' => $phone];
