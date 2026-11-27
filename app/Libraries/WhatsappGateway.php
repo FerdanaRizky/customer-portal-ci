@@ -462,7 +462,7 @@ class WhatsappGateway
             str_contains($qrPath, chr(92)) ||
             preg_match('/[\\x00-\\x1F\\x7F]/', $qrPath)
         ) {
-            throw new \\RuntimeException('Path gambar QR GOWA tidak valid.');
+            throw new \RuntimeException('Path gambar QR GOWA tidak valid.');
         }
 
         $imageUrl = $config['baseURL'] . $qrPath
