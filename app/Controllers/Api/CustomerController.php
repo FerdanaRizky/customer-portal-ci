@@ -15,12 +15,12 @@ class CustomerController extends BaseController
     private function auditCustomer(string $event, array $customer, array $detail = []): void
     {
         try {
-            (new \\App\\Models\\PortalModel())->log(
+            (new \App\Models\PortalModel())->log(
                 $event,
                 (string) ($customer['phone'] ?? 'customer'),
                 ['deviceId' => (string) ($customer['deviceId'] ?? ''), ...$detail]
             );
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             log_message('error', 'Customer audit write failed: {error}', [
                 'error' => $e->getMessage(),
             ]);
