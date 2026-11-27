@@ -121,7 +121,7 @@ small{color:var(--muted)}
    <p class="muted">Memilih device hanya mengubah device pengiriman Portal. Device GOWA tidak dihapus, tidak logout, dan tidak dipasangkan ulang. Device <strong>billing</strong> tetap dibiarkan aktif untuk layanan lain.</p>
   </div>
 
-  <div class="card">
+  <div class="card" id="waPairingCard">
    <h2>Tambah Device WhatsApp Baru</h2>
    <p class="muted">Buat sesi WhatsApp khusus Customer Portal. Device baru akan memiliki ID dengan awalan <strong>portal-</strong> dan tidak mengubah device billing.</p>
    <div class="actions">
@@ -331,6 +331,18 @@ async function loadWaDevices(){
   const data=await api('/api/admin/whatsapp/devices');
   const devices=Array.isArray(data.devices)?data.devices:[];
   const selected=data.selectedDeviceId||'';
+  // Portal hanya mengizinkan satu sesi WhatsApp yang sudah login.
+  // Device billing dan device non-Portal tidak memengaruhi aturan ini.
+  const hasLoggedInPortalSession=devices.some(device=>
+   String(device.id||'').startsWith('portal-') &&
+   String(device.state||'').toLowerCase()==='logged_in'
+  );
+  $('waPairingCard').hidden=hasLoggedInPortalSession;
+  if(hasLoggedInPortalSession){
+   stopNewWaPairing();
+   $('newWaQrPanel').hidden=true;
+   $('newWaDeviceMsg').textContent='Sesi WhatsApp Customer Portal sudah aktif. Menu pairing tersedia kembali setelah sesi Portal di-logout atau dihapus dari GOWA.';
+  }
   select.replaceChildren();
   if(!devices.length){
    select.add(new Option('Tidak ada device ditemukan',''));
