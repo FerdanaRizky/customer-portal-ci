@@ -124,24 +124,30 @@ class GenieAcsClient
         }
 
         $tag = 'customer:' . $phone;
-        $filter = rawurlencode(json_encode(['_id' => $deviceId]));
+        $filter = rawurlencode(json_encode(['_tags' => [$tag]]));
 
         $result = $this->request(
             'GET',
             'devices/?query=' . $filter . '&projection=_id,_tags'
         );
 
-        $device = $result[0] ?? null;
+        $matches = array_values(array_filter(
+            $result,
+            static fn ($device) =>
+                is_array($device) &&
+                !empty($device['_id']) &&
+                in_array($tag, $device['_tags'] ?? [], true)
+        ));
 
-        if (
-            !is_array($device) ||
-            (string) ($device['_id'] ?? '') !== $deviceId ||
-            !in_array($tag, $device['_tags'] ?? [], true)
-        ) {
+        // Tolak sesi jika nomor tidak lagi dipetakan secara unik ke device
+        // yang sama dengan device ID saat OTP diverifikasi.
+        if (count($matches) !== 1) {
             return null;
         }
 
-        return $device;
+        $device = $matches[0];
+
+        return (string) $device['_id'] === $deviceId ? $device : null;
     }
 
     public function command(string $deviceId, string $name, array $parameters = []): array
