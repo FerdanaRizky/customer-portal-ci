@@ -35,49 +35,99 @@ class GenieAcsClient
     public function request(string $method, string $path, array $payload = []): array
     {
         if ($this->baseUrl === '') {
-            throw new \RuntimeException('URL GenieACS belum dikonfigurasi.');
+            throw new \\RuntimeException('URL GenieACS belum dikonfigurasi.');
+        }
+
+        $base = parse_url($this->baseUrl);
+        if (
+            !is_array($base) ||
+            !in_array(strtolower((string) ($base['scheme'] ?? '')), ['http', 'https'], true) ||
+            empty($base['host']) ||
+            isset($base['user']) ||
+            isset($base['pass'])
+        ) {
+            throw new \\RuntimeException('URL GenieACS tidak valid. Gunakan alamat HTTP atau HTTPS yang benar.');
+        }
+
+        $method = strtoupper($method);
+        if (!in_array($method, ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+            throw new \\InvalidArgumentException('Metode request GenieACS tidak didukung.');
         }
 
         $url = $this->baseUrl . '/' . ltrim($path, '/');
         $ch = curl_init($url);
 
-        $headers = ['Accept: application/json'];
+        if ($ch === false) {
+            throw new \\RuntimeException('Tidak dapat memulai koneksi ke GenieACS.');
+        }
 
+        $headers = ['Accept: application/json'];
         $options = [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CUSTOMREQUEST => strtoupper($method),
+            CURLOPT_CUSTOMREQUEST => $method,
             CURLOPT_CONNECTTIMEOUT => 8,
             CURLOPT_TIMEOUT => 20,
+            CURLOPT_NOSIGNAL => true,
             CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_FOLLOWLOCATION => false,
         ];
 
-        if (in_array(strtoupper($method), ['POST', 'PUT', 'PATCH'], true)) {
+        if (in_array($method, ['POST', 'PUT', 'PATCH'], true)) {
             $options[CURLOPT_POSTFIELDS] = json_encode($payload, JSON_THROW_ON_ERROR);
             $options[CURLOPT_HTTPHEADER][] = 'Content-Type: application/json';
         }
 
-        if ($this->username !== null) {
+        if ($this->username !== null && $this->username !== '') {
             $options[CURLOPT_USERPWD] = $this->username . ':' . ($this->password ?? '');
+            $options[CURLOPT_HTTPAUTH] = CURLAUTH_BASIC;
         }
 
         curl_setopt_array($ch, $options);
 
         $body = curl_exec($ch);
         $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-        $error = curl_error($ch);
-
+        $curlError = curl_error($ch);
+        $curlErrno = curl_errno($ch);
         curl_close($ch);
 
-        if ($body === false || $status >= 400) {
-            throw new \RuntimeException(
-                'GenieACS request gagal (' . $status . '): ' .
-                ($error ?: (string) $body)
+        if ($body === false) {
+            throw new \\RuntimeException(
+                'Koneksi ke GenieACS gagal (cURL ' . $curlErrno . '): ' .
+                ($curlError !== '' ? $curlError : 'kesalahan jaringan atau timeout.')
             );
         }
 
-        $decoded = json_decode((string) $body, true);
+        if ($status < 200 || $status >= 300) {
+            // Jangan masukkan response body ke exception/log karena dapat
+            // berisi detail internal atau data perangkat.
+            throw new \\RuntimeException(
+                'GenieACS mengembalikan HTTP ' . $status . '.'
+            );
+        }
 
-        return is_array($decoded) ? $decoded : ['raw' => $body];
+        if ($body === '') {
+            return [];
+        }
+
+        try {
+            $decoded = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\\JsonException $e) {
+            throw new \\RuntimeException(
+                'GenieACS mengembalikan respons JSON yang tidak valid.',
+                0,
+                $e
+            );
+        }
+
+        if (!is_array($decoded)) {
+            throw new \\RuntimeException(
+                'Format respons GenieACS tidak sesuai.'
+            );
+        }
+
+        return $decoded;
     }
 
     /**
