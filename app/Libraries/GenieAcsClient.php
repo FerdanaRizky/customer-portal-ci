@@ -35,7 +35,7 @@ class GenieAcsClient
     public function request(string $method, string $path, array $payload = []): array
     {
         if ($this->baseUrl === '') {
-            throw new \\RuntimeException('URL GenieACS belum dikonfigurasi.');
+            throw new \RuntimeException('URL GenieACS belum dikonfigurasi.');
         }
 
         $base = parse_url($this->baseUrl);
@@ -46,19 +46,19 @@ class GenieAcsClient
             isset($base['user']) ||
             isset($base['pass'])
         ) {
-            throw new \\RuntimeException('URL GenieACS tidak valid. Gunakan alamat HTTP atau HTTPS yang benar.');
+            throw new \RuntimeException('URL GenieACS tidak valid. Gunakan alamat HTTP atau HTTPS yang benar.');
         }
 
         $method = strtoupper($method);
         if (!in_array($method, ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], true)) {
-            throw new \\InvalidArgumentException('Metode request GenieACS tidak didukung.');
+            throw new \InvalidArgumentException('Metode request GenieACS tidak didukung.');
         }
 
         $url = $this->baseUrl . '/' . ltrim($path, '/');
         $ch = curl_init($url);
 
         if ($ch === false) {
-            throw new \\RuntimeException('Tidak dapat memulai koneksi ke GenieACS.');
+            throw new \RuntimeException('Tidak dapat memulai koneksi ke GenieACS.');
         }
 
         $headers = ['Accept: application/json'];
@@ -93,7 +93,7 @@ class GenieAcsClient
         curl_close($ch);
 
         if ($body === false) {
-            throw new \\RuntimeException(
+            throw new \RuntimeException(
                 'Koneksi ke GenieACS gagal (cURL ' . $curlErrno . '): ' .
                 ($curlError !== '' ? $curlError : 'kesalahan jaringan atau timeout.')
             );
@@ -102,7 +102,7 @@ class GenieAcsClient
         if ($status < 200 || $status >= 300) {
             // Jangan masukkan response body ke exception/log karena dapat
             // berisi detail internal atau data perangkat.
-            throw new \\RuntimeException(
+            throw new \RuntimeException(
                 'GenieACS mengembalikan HTTP ' . $status . '.'
             );
         }
@@ -113,8 +113,8 @@ class GenieAcsClient
 
         try {
             $decoded = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
-        } catch (\\JsonException $e) {
-            throw new \\RuntimeException(
+        } catch (\JsonException $e) {
+            throw new \RuntimeException(
                 'GenieACS mengembalikan respons JSON yang tidak valid.',
                 0,
                 $e
@@ -122,7 +122,7 @@ class GenieAcsClient
         }
 
         if (!is_array($decoded)) {
-            throw new \\RuntimeException(
+            throw new \RuntimeException(
                 'Format respons GenieACS tidak sesuai.'
             );
         }
