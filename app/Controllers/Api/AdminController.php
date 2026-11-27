@@ -413,7 +413,7 @@ class AdminController extends BaseController
                 'success' => true,
                 'message' => 'Device dan sesi WhatsApp berhasil dihapus dari GOWA. Menu pairing tersedia kembali setelah daftar disinkronkan.',
             ]);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             return $this->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
     }
