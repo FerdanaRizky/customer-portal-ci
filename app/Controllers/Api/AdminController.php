@@ -327,15 +327,88 @@ class AdminController extends BaseController
         }
 
         try {
-            $devices = (new WhatsappGateway())->listDevices();
-            $selected = (new PortalModel())->setting('gowa_device_id', 'billing');
+            $model = new PortalModel();
+            $allDevices = (new WhatsappGateway())->listDevices();
+            $hidden = json_decode((string) $model->setting('gowa_hidden_devices', '[]'), true);
+            $hidden = is_array($hidden) ? array_values(array_filter($hidden, 'is_string')) : [];
+            $selected = $model->setting('gowa_device_id', 'billing');
+            $hasLoggedInPortalSession = false;
+
+            foreach ($allDevices as $device) {
+                if (str_starts_with($device['id'], 'portal-')
+                    && strtolower($device['state']) === 'logged_in') {
+                    $hasLoggedInPortalSession = true;
+                    break;
+                }
+            }
+
+            $visibleDevices = array_values(array_filter(
+                $allDevices,
+                static fn ($device) => !in_array($device['id'], $hidden, true)
+            ));
+
             return $this->json([
                 'success' => true,
-                'devices' => $devices,
+                'devices' => $visibleDevices,
+                'hiddenDeviceIds' => $hidden,
                 'selectedDeviceId' => $selected,
+                'hasLoggedInPortalSession' => $hasLoggedInPortalSession,
+                'totalGowaDevices' => count($allDevices),
             ]);
-        } catch (\Throwable $e) {
+        } catch (\\Throwable $e) {
             return $this->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
+    }
+
+    public function whatsappHideDevice()
+    {
+        if ($r = $this->guard()) {
+            return $r;
+        }
+
+        $data = $this->request->getJSON(true) ?: $this->request->getPost();
+        $deviceId = trim((string) ($data['deviceId'] ?? ''));
+
+        if (!preg_match('/^portal-[a-f0-9]{16}$/', $deviceId)) {
+            return $this->json(['success' => false, 'message' => 'Hanya device milik Customer Portal yang dapat dilepas dari daftar Portal.'], 422);
+        }
+
+        try {
+            $model = new PortalModel();
+            $selected = (string) $model->setting('gowa_device_id', 'billing');
+            if (hash_equals($selected, $deviceId)) {
+                return $this->json(['success' => false, 'message' => 'Device ini masih dipilih sebagai pengirim Portal. Pilih device lain terlebih dahulu.'], 422);
+            }
+
+            $exists = false;
+            foreach ((new WhatsappGateway())->listDevices() as $device) {
+                if (hash_equals($device['id'], $deviceId)) {
+                    $exists = true;
+                    break;
+                }
+            }
+            if (!$exists) {
+                return $this->json(['success' => false, 'message' => 'Device tidak ditemukan di GOWA.'], 404);
+            }
+
+            $hidden = json_decode((string) $model->setting('gowa_hidden_devices', '[]'), true);
+            $hidden = is_array($hidden) ? array_values(array_filter($hidden, 'is_string')) : [];
+            if (!in_array($deviceId, $hidden, true)) {
+                $hidden[] = $deviceId;
+                $model->saveSetting('gowa_hidden_devices', json_encode(array_values($hidden), JSON_THROW_ON_ERROR));
+            }
+
+            $model->log('whatsapp.device_unlinked', session('admin.username'), [
+                'deviceId' => $deviceId,
+                'action' => 'local_hide_only',
+            ]);
+
+            return $this->json([
+                'success' => true,
+                'message' => 'Device dilepas dari daftar Customer Portal. Sesi GOWA tetap aktif dan tidak dihapus atau di-logout.',
+            ]);
+        } catch (\\Throwable $e) {
+            return $this->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
     }
 
