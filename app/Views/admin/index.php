@@ -54,6 +54,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--muted);font-size:12p
 #login{max-width:420px;margin:70px auto}
 #login input{margin:10px 0}
 .message{min-height:20px;color:var(--muted);margin:12px 0 0}
+#newWaQrImage{max-width:320px}
 small{color:var(--muted)}
 @media(max-width:650px){
  .wrap{padding:14px}.row{grid-template-columns:1fr}
@@ -118,6 +119,22 @@ small{color:var(--muted)}
    <p class="message" id="waDevicesMsg"></p>
    <div id="waDevicesList" class="muted"></div>
    <p class="muted">Memilih device hanya mengubah device pengiriman Portal. Device GOWA tidak dihapus, tidak logout, dan tidak dipasangkan ulang. Device <strong>billing</strong> tetap dibiarkan aktif untuk layanan lain.</p>
+  </div>
+
+  <div class="card">
+   <h2>Tambah Device WhatsApp Baru</h2>
+   <p class="muted">Buat sesi WhatsApp khusus Customer Portal. Device baru akan memiliki ID dengan awalan <strong>portal-</strong> dan tidak mengubah device billing.</p>
+   <div class="actions">
+    <button type="button" id="createWaDevice">Buat Device &amp; Tampilkan QR</button>
+   </div>
+   <p class="message" id="newWaDeviceMsg">Belum ada proses pairing.</p>
+   <div id="newWaQrPanel" hidden style="margin-top:16px;padding:16px;background:var(--surface2);border:1px solid var(--border);border-radius:12px">
+    <strong id="newWaDeviceId"></strong>
+    <p class="muted">Pindai QR ini melalui WhatsApp di ponsel: Perangkat tertaut → Tautkan perangkat.</p>
+    <img id="newWaQrImage" alt="QR WhatsApp untuk device baru" style="display:block;width:min(100%,320px);height:auto;margin:12px auto;background:#fff;padding:10px;border-radius:10px">
+    <p class="muted" id="newWaQrCountdown"></p>
+    <button type="button" class="secondary" id="refreshNewWaQr">Muat Ulang QR</button>
+   </div>
   </div>
  </section>
 
@@ -339,6 +356,91 @@ async function loadWaDevices(){
  }
 }
 
+let newWaPairDeviceId='';
+let newWaPairTimer=null;
+let newWaQrTimer=null;
+let newWaQrSeconds=0;
+
+function stopNewWaPairing(){
+ if(newWaPairTimer!==null){clearInterval(newWaPairTimer);newWaPairTimer=null;}
+ if(newWaQrTimer!==null){clearInterval(newWaQrTimer);newWaQrTimer=null;}
+}
+
+async function requestNewWaQr(){
+ if(!newWaPairDeviceId)return;
+ $('newWaDeviceMsg').textContent='Meminta QR dari GOWA...';
+ $('refreshNewWaQr').disabled=true;
+ try{
+  const d=await api('/api/admin/whatsapp/qr',{
+   method:'POST',
+   body:JSON.stringify({deviceId:newWaPairDeviceId})
+  });
+  $('newWaQrImage').src=d.qrImage;
+  newWaQrSeconds=Number(d.qrDuration)||20;
+  $('newWaQrCountdown').textContent='QR berlaku sekitar '+newWaQrSeconds+' detik.';
+  if(newWaQrTimer!==null)clearInterval(newWaQrTimer);
+  newWaQrTimer=setInterval(()=>{
+   newWaQrSeconds=Math.max(0,newWaQrSeconds-1);
+   $('newWaQrCountdown').textContent=newWaQrSeconds>0
+    ? 'QR berlaku sekitar '+newWaQrSeconds+' detik.'
+    : 'Masa QR mungkin habis. Klik Muat Ulang QR jika belum berhasil dipindai.';
+   if(newWaQrSeconds===0){clearInterval(newWaQrTimer);newWaQrTimer=null;}
+  },1000);
+  $('newWaDeviceMsg').textContent='QR siap. Pindai menggunakan WhatsApp di ponsel.';
+ }catch(e){
+  $('newWaDeviceMsg').textContent=e.message;
+ }finally{
+  $('refreshNewWaQr').disabled=false;
+ }
+}
+
+async function checkNewWaPairing(){
+ if(!newWaPairDeviceId)return;
+ try{
+  const d=await api('/api/admin/whatsapp/devices');
+  const device=(d.devices||[]).find(x=>x.id===newWaPairDeviceId);
+  if(device && String(device.state).toLowerCase()==='logged_in'){
+   stopNewWaPairing();
+   $('newWaDeviceMsg').textContent='Berhasil! Device '+newWaPairDeviceId+' sudah login dan tersedia di daftar device.';
+   $('newWaQrCountdown').textContent='Pairing berhasil.';
+   await loadWaDevices();
+   return;
+  }
+  if(!device){
+   $('newWaDeviceMsg').textContent='Menunggu device muncul di GOWA...';
+  }else{
+   $('newWaDeviceMsg').textContent='Menunggu pemindaian QR. Status device: '+device.state;
+  }
+ }catch(e){
+  $('newWaDeviceMsg').textContent='Pemeriksaan pairing: '+e.message;
+ }
+}
+
+async function createNewWaDevice(){
+ if(!confirm('Buat sesi WhatsApp baru khusus Customer Portal? Device billing tidak akan diubah.'))return;
+ $('createWaDevice').disabled=true;
+ $('newWaDeviceMsg').textContent='Membuat slot device baru di GOWA...';
+ $('newWaQrPanel').hidden=true;
+ stopNewWaPairing();
+ newWaPairDeviceId='';
+ try{
+  const created=await api('/api/admin/whatsapp/create',{
+   method:'POST',
+   body:JSON.stringify({})
+  });
+  newWaPairDeviceId=created.deviceId;
+  $('newWaDeviceId').textContent='Device ID: '+newWaPairDeviceId;
+  $('newWaQrPanel').hidden=false;
+  await requestNewWaQr();
+  newWaPairTimer=setInterval(checkNewWaPairing,5000);
+  await loadWaDevices();
+ }catch(e){
+  $('newWaDeviceMsg').textContent=e.message;
+ }finally{
+  $('createWaDevice').disabled=false;
+ }
+}
+
 async function saveWaDevice(){
  const deviceId=$('waDeviceSelect').value;
  if(!deviceId){$('waDevicesMsg').textContent='Pilih device terlebih dahulu.';return;}
@@ -477,6 +579,8 @@ $('saveCredentials').onclick=async()=>{
 $('checkWa').onclick=refreshWa;
 $('refreshWaDevices').onclick=loadWaDevices;
 $('saveWaDevice').onclick=saveWaDevice;
+$('createWaDevice').onclick=createNewWaDevice;
+$('refreshNewWaQr').onclick=requestNewWaQr;
 $('customers').onclick=async()=>{
  try{$('customerResult').textContent=JSON.stringify(await api('/api/admin/customers'),null,2);}
  catch(e){$('customerResult').textContent=e.message;}
