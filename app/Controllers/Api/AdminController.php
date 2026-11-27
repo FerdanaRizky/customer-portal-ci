@@ -403,7 +403,7 @@ class AdminController extends BaseController
                 'deviceId' => $result['deviceId'],
                 'message' => 'Slot device Portal berhasil dibuat. Lanjutkan dengan meminta QR.',
             ]);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             return $this->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
     }
@@ -422,7 +422,7 @@ class AdminController extends BaseController
                 'success' => true,
                 ...(new WhatsappGateway())->requestQr($deviceId),
             ]);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             return $this->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
     }
