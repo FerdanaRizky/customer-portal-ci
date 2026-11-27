@@ -566,11 +566,11 @@ class AdminController extends BaseController
             $gateway->createPortalDevice($deviceId);
             try {
                 $pairing = $gateway->requestPairCode($deviceId, $phone);
-            } catch (\\Throwable $e) {
+            } catch (\Throwable $e) {
                 // Bersihkan slot yang baru dibuat jika GOWA gagal menerbitkan pairing code.
                 try {
                     $gateway->deletePortalDevice($deviceId);
-                } catch (\\Throwable $cleanupError) {
+                } catch (\Throwable $cleanupError) {
                     log_message('error', 'Failed to clean up unused Portal device {device}: {error}', [
                         'device' => $deviceId,
                         'error' => $cleanupError->getMessage(),
@@ -590,7 +590,7 @@ class AdminController extends BaseController
                 'pairCode' => $pairing['pairCode'],
                 'message' => 'Kode pairing berhasil dibuat. Masukkan kode tersebut di WhatsApp pada ponsel.',
             ]);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             return $this->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
     }
