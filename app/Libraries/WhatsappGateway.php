@@ -371,6 +371,56 @@ class WhatsappGateway
      * Meminta QR hanya untuk device yang dibuat khusus oleh Customer Portal.
      * Tidak pernah menjalankan login/QR untuk device billing atau device lain.
      */
+    /**
+     * Menghapus device khusus Customer Portal dari GOWA.
+     * Device non-Portal (termasuk billing) tidak boleh dihapus melalui method ini.
+     */
+    public function deletePortalDevice(string $deviceId): array
+    {
+        if (!preg_match('/^portal-[a-f0-9]{16}$/', $deviceId)) {
+            throw new \\InvalidArgumentException('Hanya device milik Customer Portal yang dapat dihapus.');
+        }
+
+        $config = $this->config();
+        if ($config['baseURL'] === '' || empty($config['username']) || empty($config['password'])) {
+            throw new \\RuntimeException('Konfigurasi GOWA belum lengkap.');
+        }
+
+        $url = $config['baseURL'] . '/devices/' . rawurlencode($deviceId);
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CUSTOMREQUEST => 'DELETE',
+            CURLOPT_CONNECTTIMEOUT => 8,
+            CURLOPT_TIMEOUT => 20,
+            CURLOPT_USERPWD => $config['username'] . ':' . $config['password'],
+            CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
+            CURLOPT_HTTPHEADER => [
+                'Accept: application/json',
+                'X-Device-Id: ' . $config['deviceId'],
+            ],
+        ]);
+
+        $body = curl_exec($ch);
+        $http = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($body === false) {
+            throw new \\RuntimeException('Tidak dapat menghubungi GOWA untuk menghapus device: ' . $error);
+        }
+
+        if ($http < 200 || $http >= 300) {
+            log_message('error', 'GOWA device delete failed. HTTP {status}; response {body}', [
+                'status' => $http,
+                'body' => substr((string) $body, 0, 500),
+            ]);
+            throw new \\RuntimeException('GOWA gagal menghapus device (HTTP ' . $http . '). Device Portal tidak dilepas dari daftar.');
+        }
+
+        return ['httpStatus' => $http];
+    }
+
     public function requestQr(string $deviceId): array
     {
         if (!preg_match('/^portal-[a-f0-9]{16}$/', $deviceId)) {
