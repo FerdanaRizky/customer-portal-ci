@@ -7,7 +7,12 @@ abstract class BaseController extends Controller
 {
     protected function json(array $data, int $status = 200)
     {
-        return $this->response->setStatusCode($status)->setJSON($data);
+        return $this->response
+            ->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            ->setHeader('Pragma', 'no-cache')
+            ->setHeader('Expires', '0')
+            ->setStatusCode($status)
+            ->setJSON($data);
     }
 
     protected function requireCustomer(): ?array
