@@ -7,6 +7,6 @@ class Encryption extends BaseConfig
 {
     public string $key = '';
     public string $driver = 'OpenSSL';
-    public string $blockSize = 16;
+    public int $blockSize = 16;
     public string $digest = 'SHA512';
 }
