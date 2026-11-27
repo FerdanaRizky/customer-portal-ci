@@ -211,6 +211,64 @@ class WhatsappGateway
         return $devices;
     }
 
+    /**
+     * Membuat slot device baru khusus milik Customer Portal.
+     * ID billing dan device non-Portal tidak pernah disentuh.
+     */
+    public function createPortalDevice(string $deviceId): array
+    {
+        if (!preg_match('/^portal-[a-f0-9]{16}$/', $deviceId)) {
+            throw new \\InvalidArgumentException('ID device Portal tidak valid.');
+        }
+
+        $config = $this->config();
+        if ($config['baseURL'] === '' || empty($config['username']) || empty($config['password'])) {
+            throw new \\RuntimeException('Konfigurasi GOWA belum lengkap.');
+        }
+
+        foreach ($this->listDevices() as $device) {
+            if (hash_equals($device['id'], $deviceId)) {
+                throw new \\RuntimeException('ID device sudah terdaftar. Silakan coba lagi.');
+            }
+        }
+
+        $ch = curl_init($config['baseURL'] . '/devices');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_CONNECTTIMEOUT => 8,
+            CURLOPT_TIMEOUT => 20,
+            CURLOPT_USERPWD => $config['username'] . ':' . $config['password'],
+            CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
+            CURLOPT_HTTPHEADER => [
+                'Accept: application/json',
+                'Content-Type: application/json',
+                'X-Device-Id: ' . $config['deviceId'],
+            ],
+            CURLOPT_POSTFIELDS => json_encode(['device_id' => $deviceId], JSON_THROW_ON_ERROR),
+        ]);
+
+        $body = curl_exec($ch);
+        $http = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($body === false || $http < 200 || $http >= 300) {
+            log_message('error', 'GOWA create device failed. HTTP {status}; {error}', [
+                'status' => $http,
+                'error' => $error,
+            ]);
+            throw new \\RuntimeException('GOWA gagal membuat slot device (HTTP ' . $http . ').');
+        }
+
+        $data = json_decode((string) $body, true);
+        if (!is_array($data) || (isset($data['code']) && strtoupper((string) $data['code']) !== 'SUCCESS')) {
+            throw new \\RuntimeException('Respons pembuatan device GOWA tidak valid.');
+        }
+
+        return ['deviceId' => $deviceId];
+    }
+
     public function status(): array
     {
         $config = $this->config();
@@ -310,33 +368,56 @@ class WhatsappGateway
     }
 
     /**
-     * Meminta QR pairing dari device GOWA yang sudah terdaftar.
-     * Tidak membuat, menghapus, atau logout device.
+     * Meminta QR hanya untuk device yang dibuat khusus oleh Customer Portal.
+     * Tidak pernah menjalankan login/QR untuk device billing atau device lain.
      */
-    public function requestQr(): array
+    public function requestQr(string $deviceId): array
     {
+        if (!preg_match('/^portal-[a-f0-9]{16}$/', $deviceId)) {
+            throw new \\InvalidArgumentException('QR hanya diizinkan untuk device milik Portal.');
+        }
+
         $config = $this->config();
-
-        if (
-            $config['baseURL'] === '' ||
-            empty($config['username']) ||
-            empty($config['password']) ||
-            $config['deviceId'] === ''
-        ) {
-            throw new \RuntimeException('Konfigurasi GOWA belum lengkap.');
+        if ($config['baseURL'] === '' || empty($config['username']) || empty($config['password'])) {
+            throw new \\RuntimeException('Konfigurasi GOWA belum lengkap.');
         }
 
-        $current = $this->status();
-
-        if (!empty($current['loggedIn'])) {
-            throw new \RuntimeException(
-                'WhatsApp sudah login. QR tidak perlu dibuat.'
-            );
+        $known = false;
+        foreach ($this->listDevices() as $device) {
+            if (hash_equals($device['id'], $deviceId)) {
+                $known = true;
+                break;
+            }
+        }
+        if (!$known) {
+            throw new \\RuntimeException('Device Portal tidak ditemukan di GOWA.');
         }
 
-        $url = $config['baseURL'] . '/devices/'
-            . rawurlencode($config['deviceId']) . '/login';
+        $statusUrl = $config['baseURL'] . '/devices/' . rawurlencode($deviceId) . '/status';
+        $ch = curl_init($statusUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPGET => true,
+            CURLOPT_CONNECTTIMEOUT => 8,
+            CURLOPT_TIMEOUT => 15,
+            CURLOPT_USERPWD => $config['username'] . ':' . $config['password'],
+            CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
+            CURLOPT_HTTPHEADER => ['Accept: application/json', 'X-Device-Id: ' . $deviceId],
+        ]);
+        $statusBody = curl_exec($ch);
+        $statusHttp = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
 
+        if ($statusBody === false || $statusHttp < 200 || $statusHttp >= 300) {
+            throw new \\RuntimeException('Tidak dapat memeriksa status device Portal (HTTP ' . $statusHttp . ').');
+        }
+        $statusData = json_decode((string) $statusBody, true);
+        $statusResult = is_array($statusData['results'] ?? null) ? $statusData['results'] : [];
+        if (!empty($statusResult['is_logged_in'])) {
+            throw new \\RuntimeException('Device ini sudah login. QR tidak perlu dibuat.');
+        }
+
+        $url = $config['baseURL'] . '/devices/' . rawurlencode($deviceId) . '/login';
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
@@ -345,12 +426,8 @@ class WhatsappGateway
             CURLOPT_TIMEOUT => 20,
             CURLOPT_USERPWD => $config['username'] . ':' . $config['password'],
             CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
-            CURLOPT_HTTPHEADER => [
-                'Accept: application/json',
-                'X-Device-Id: ' . $config['deviceId'],
-            ],
+            CURLOPT_HTTPHEADER => ['Accept: application/json', 'X-Device-Id: ' . $deviceId],
         ]);
-
         $body = curl_exec($ch);
         $http = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         $error = curl_error($ch);
@@ -361,41 +438,29 @@ class WhatsappGateway
                 'status' => $http,
                 'error' => $error,
             ]);
-            throw new \RuntimeException('GOWA gagal memulai QR (HTTP ' . $http . ').');
+            throw new \\RuntimeException('GOWA gagal memulai QR (HTTP ' . $http . ').');
         }
 
         $data = json_decode((string) $body, true);
-        $qr = $data['results'] ?? [];
-
-        if (
-            !is_array($qr) ||
-            strtoupper((string) ($data['code'] ?? '')) !== 'SUCCESS' ||
-            empty($qr['qr_link'])
-        ) {
-            throw new \RuntimeException('Respons QR GOWA tidak valid.');
+        $qr = is_array($data['results'] ?? null) ? $data['results'] : [];
+        if (!is_array($data) || strtoupper((string) ($data['code'] ?? '')) !== 'SUCCESS' || empty($qr['qr_link'])) {
+            throw new \\RuntimeException('Respons QR GOWA tidak valid.');
         }
 
-        // Hanya izinkan URL gambar dari host GOWA yang telah dikonfigurasi.
         $base = parse_url($config['baseURL']);
         $qrUrl = parse_url((string) $qr['qr_link']);
-
         if (!$base || !$qrUrl || empty($qrUrl['path'])) {
-            throw new \RuntimeException('Alamat QR GOWA tidak valid.');
+            throw new \\RuntimeException('Alamat QR GOWA tidak valid.');
         }
-
-        if (
-            isset($qrUrl['host']) &&
-            (
-                strtolower($qrUrl['host']) !== strtolower($base['host'] ?? '') ||
-                strtolower($qrUrl['scheme'] ?? '') !== strtolower($base['scheme'] ?? '')
-            )
-        ) {
-            throw new \RuntimeException('Host gambar QR tidak sesuai dengan GOWA.');
+        if (isset($qrUrl['host']) && (
+            strtolower($qrUrl['host']) !== strtolower($base['host'] ?? '') ||
+            strtolower($qrUrl['scheme'] ?? '') !== strtolower($base['scheme'] ?? '')
+        )) {
+            throw new \\RuntimeException('Host gambar QR tidak sesuai dengan GOWA.');
         }
 
         $imageUrl = $config['baseURL'] . $qrUrl['path']
             . (isset($qrUrl['query']) ? '?' . $qrUrl['query'] : '');
-
         $ch = curl_init($imageUrl);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
@@ -403,31 +468,22 @@ class WhatsappGateway
             CURLOPT_TIMEOUT => 15,
             CURLOPT_USERPWD => $config['username'] . ':' . $config['password'],
             CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
-            CURLOPT_HTTPHEADER => [
-                'Accept: image/*',
-                'X-Device-Id: ' . $config['deviceId'],
-            ],
+            CURLOPT_HTTPHEADER => ['Accept: image/*', 'X-Device-Id: ' . $deviceId],
         ]);
-
         $image = curl_exec($ch);
         $imageHttp = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         $contentType = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
         curl_close($ch);
 
-        if (
-            $image === false ||
-            $imageHttp < 200 ||
-            $imageHttp >= 300 ||
-            !str_starts_with(strtolower($contentType), 'image/') ||
-            strlen($image) > 1024 * 1024
-        ) {
-            throw new \RuntimeException('Gambar QR tidak dapat diambil dari GOWA.');
+        if ($image === false || $imageHttp < 200 || $imageHttp >= 300
+            || !str_starts_with(strtolower($contentType), 'image/')
+            || strlen($image) > 1024 * 1024) {
+            throw new \\RuntimeException('Gambar QR tidak dapat diambil dari GOWA.');
         }
 
         return [
-            'deviceId' => $config['deviceId'],
-            'qrImage' => 'data:' . explode(';', $contentType)[0]
-                . ';base64,' . base64_encode($image),
+            'deviceId' => $deviceId,
+            'qrImage' => 'data:' . explode(';', $contentType)[0] . ';base64,' . base64_encode($image),
             'qrDuration' => (int) ($qr['qr_duration'] ?? 20),
         ];
     }
