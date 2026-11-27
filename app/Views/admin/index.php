@@ -118,6 +118,7 @@ small{color:var(--muted)}
    </div>
    <p class="message" id="waDevicesMsg"></p>
    <div id="waDevicesList" class="muted"></div>
+   <div id="waPortalDevices" style="margin-top:12px"></div>
    <p class="muted">Memilih device hanya mengubah device pengiriman Portal. Device GOWA tidak dihapus, tidak logout, dan tidak dipasangkan ulang. Device <strong>billing</strong> tetap dibiarkan aktif untuk layanan lain.</p>
   </div>
 
@@ -333,10 +334,7 @@ async function loadWaDevices(){
   const selected=data.selectedDeviceId||'';
   // Portal hanya mengizinkan satu sesi WhatsApp yang sudah login.
   // Device billing dan device non-Portal tidak memengaruhi aturan ini.
-  const hasLoggedInPortalSession=devices.some(device=>
-   String(device.id||'').startsWith('portal-') &&
-   String(device.state||'').toLowerCase()==='logged_in'
-  );
+  const hasLoggedInPortalSession=!!data.hasLoggedInPortalSession;
   $('waPairingCard').hidden=hasLoggedInPortalSession;
   if(hasLoggedInPortalSession){
    stopNewWaPairing();
@@ -357,9 +355,37 @@ async function loadWaDevices(){
    select.add(new Option(selected+' (tidak ditemukan di GOWA)',selected));
    select.value=selected;
   }
-  $('waDevicesList').textContent=devices.length
-   ? devices.length+' device ditemukan di GOWA.'
-   : 'Belum ada device di GOWA.';
+  $('waDevicesList').textContent=(data.totalGowaDevices??devices.length)+' device ditemukan di GOWA. '
+   +(data.hiddenDeviceIds?.length||0)+' device dilepas dari daftar Portal.';
+  const portalBox=$('waPortalDevices');
+  portalBox.replaceChildren();
+  const portalDevices=devices.filter(device=>String(device.id||'').startsWith('portal-'));
+  if(portalDevices.length){
+   const heading=document.createElement('strong');
+   heading.textContent='Device milik Customer Portal';
+   portalBox.appendChild(heading);
+   portalDevices.forEach(device=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--border)';
+    const info=document.createElement('span');
+    info.textContent=(device.displayName||device.id)+' — '+device.state;
+    row.appendChild(info);
+    if(device.id!==selected){
+     const hide=document.createElement('button');
+     hide.type='button';
+     hide.className='secondary';
+     hide.textContent='Lepas dari Portal';
+     hide.addEventListener('click',()=>hideWaDevice(device.id));
+     row.appendChild(hide);
+    }else{
+     const active=document.createElement('span');
+     active.className='muted';
+     active.textContent='Sedang digunakan';
+     row.appendChild(active);
+    }
+    portalBox.appendChild(row);
+   });
+  }
   msg.textContent='Daftar berhasil disinkronkan.';
  }catch(e){
   select.replaceChildren(new Option('Gagal memuat daftar device',''));
@@ -455,6 +481,20 @@ async function createNewWaDevice(){
   $('newWaDeviceMsg').textContent=e.message;
  }finally{
   $('createWaDevice').disabled=false;
+ }
+}
+
+async function hideWaDevice(deviceId){
+ if(!confirm('Lepas '+deviceId+' dari daftar Customer Portal? Sesi GOWA tidak akan dihapus atau di-logout.'))return;
+ try{
+  const result=await api('/api/admin/whatsapp/hide',{
+   method:'POST',
+   body:JSON.stringify({deviceId})
+  });
+  $('waDevicesMsg').textContent=result.message||'Device dilepas dari daftar Portal.';
+  await loadWaDevices();
+ }catch(e){
+  $('waDevicesMsg').textContent=e.message;
  }
 }
 
