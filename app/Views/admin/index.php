@@ -518,6 +518,9 @@ async function createNewWaDevice(){
   });
   newWaPairDeviceId=created.deviceId;
   $('newWaDeviceId').textContent='Device ID: '+newWaPairDeviceId;
+  $('newWaDeviceMsg').textContent=created.reused
+   ? 'Melanjutkan sesi device Portal yang sudah ada. Tidak membuat sesi GOWA baru.'
+   : 'Satu sesi device Portal berhasil dibuat. QR dan pairing nomor akan menggunakan sesi yang sama.';
   $('newWaQrImage').hidden=false;
   $('refreshNewWaQr').hidden=false;
   $('newWaQrPanel').hidden=false;
