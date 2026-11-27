@@ -32,7 +32,7 @@ class CustomerController extends BaseController
 
         try {
             $device = $this->client()->findDeviceByIdAndPhone($deviceId, $phone);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             log_message('error', 'Customer mapping validation failed: {error}', [
                 'error' => $e->getMessage(),
             ]);
@@ -290,6 +290,10 @@ class CustomerController extends BaseController
             return $this->json(['success' => false], 401);
         }
 
+        if ($guard = $this->validateCustomerMapping($customer)) {
+            return $guard;
+        }
+
         $data = $this->request->getJSON(true) ?: $this->request->getPost();
 
         $index = (int) ($data['index'] ?? 0);
@@ -352,6 +356,10 @@ class CustomerController extends BaseController
 
         if (!$customer) {
             return $this->json(['success' => false], 401);
+        }
+
+        if ($guard = $this->validateCustomerMapping($customer)) {
+            return $guard;
         }
 
         $deviceId = (string) ($customer['deviceId'] ?? '');
