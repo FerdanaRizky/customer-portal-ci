@@ -145,6 +145,72 @@ class WhatsappGateway
             : ['raw' => (string) $body];
     }
 
+
+    /**
+     * Membaca daftar device GOWA secara read-only.
+     * Tidak mengubah sesi, logout, atau menghapus device.
+     */
+    public function listDevices(): array
+    {
+        $config = $this->config();
+        if ($config['baseURL'] === '' || empty($config['username']) || empty($config['password'])) {
+            throw new \RuntimeException('Konfigurasi GOWA belum lengkap.');
+        }
+
+        $ch = curl_init($config['baseURL'] . '/devices');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPGET => true,
+            CURLOPT_CONNECTTIMEOUT => 8,
+            CURLOPT_TIMEOUT => 15,
+            CURLOPT_USERPWD => $config['username'] . ':' . $config['password'],
+            CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
+            CURLOPT_HTTPHEADER => [
+                'Accept: application/json',
+                'X-Device-Id: ' . $config['deviceId'],
+            ],
+        ]);
+
+        $body = curl_exec($ch);
+        $http = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($body === false || $http < 200 || $http >= 300) {
+            log_message('error', 'GOWA device list failed. HTTP {status}; {error}', [
+                'status' => $http,
+                'error' => $error,
+            ]);
+            throw new \RuntimeException('Tidak dapat membaca daftar device GOWA (HTTP ' . $http . ').');
+        }
+
+        $data = json_decode((string) $body, true);
+        if (!is_array($data) || (isset($data['code']) && strtoupper((string) $data['code']) !== 'SUCCESS')) {
+            throw new \RuntimeException('Respons daftar device GOWA tidak valid.');
+        }
+
+        $items = $data['results'] ?? [];
+        if (!is_array($items)) {
+            throw new \RuntimeException('Format daftar device GOWA tidak valid.');
+        }
+
+        $devices = [];
+        foreach ($items as $item) {
+            if (!is_array($item) || empty($item['id'])) {
+                continue;
+            }
+            $devices[] = [
+                'id' => (string) $item['id'],
+                'displayName' => (string) ($item['display_name'] ?? $item['id']),
+                'state' => (string) ($item['state'] ?? 'unknown'),
+                'jid' => (string) ($item['jid'] ?? ''),
+                'createdAt' => $item['created_at'] ?? null,
+            ];
+        }
+
+        return $devices;
+    }
+
     public function status(): array
     {
         $config = $this->config();
