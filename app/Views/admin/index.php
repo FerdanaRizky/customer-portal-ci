@@ -128,6 +128,21 @@ small{color:var(--muted)}
    <div class="actions">
     <button type="button" id="createWaDevice">Buat Device &amp; Tampilkan QR</button>
    </div>
+   <div class="field" style="margin-top:16px">
+    <label for="waPairPhone">Atau pairing menggunakan nomor WhatsApp</label>
+    <input id="waPairPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Contoh: 6281234567890">
+    <small>Masukkan nomor WhatsApp aktif. Nomor 08 akan otomatis diubah menjadi 62.</small>
+   </div>
+   <div class="actions">
+    <button type="button" class="secondary" id="createWaPairCode">Buat Kode Pairing</button>
+   </div>
+   <div id="waPairCodePanel" hidden style="margin-top:16px;padding:16px;background:var(--surface2);border:1px solid var(--border);border-radius:12px">
+    <strong id="waPairCodeDevice"></strong>
+    <p class="muted">Masukkan kode berikut di WhatsApp pada ponsel yang menggunakan nomor tersebut.</p>
+    <div id="waPairCodeValue" style="font-size:28px;font-weight:800;letter-spacing:4px;text-align:center;padding:18px;background:var(--bg);border-radius:10px;user-select:all"></div>
+    <p class="muted">WhatsApp → Perangkat tertaut → Tautkan perangkat → Tautkan dengan nomor telepon.</p>
+    <button type="button" class="secondary" id="copyWaPairCode">Salin Kode</button>
+   </div>
    <p class="message" id="newWaDeviceMsg">Belum ada proses pairing.</p>
    <div id="newWaQrPanel" hidden style="margin-top:16px;padding:16px;background:var(--surface2);border:1px solid var(--border);border-radius:12px">
     <strong id="newWaDeviceId"></strong>
@@ -465,7 +480,8 @@ async function checkNewWaPairing(){
    $('newWaQrImage').removeAttribute('src');
    $('newWaQrImage').hidden=true;
    $('refreshNewWaQr').hidden=true;
-   $('newWaQrCountdown').textContent='Pairing selesai. Untuk memasangkan ulang, logout sesi device ini terlebih dahulu.';
+   $('newWaQrCountdown').textContent='Pairing selesai. Untuk memasangkan ulang, hapus sesi device ini terlebih dahulu.';
+   $('waPairCodePanel').hidden=true;
    await loadWaDevices();
    return;
   }
@@ -476,6 +492,34 @@ async function checkNewWaPairing(){
   }
  }catch(e){
   $('newWaDeviceMsg').textContent='Pemeriksaan pairing: '+e.message;
+ }
+}
+
+async function createWaDeviceWithPairCode(){
+ const phone=$('waPairPhone').value.trim();
+ if(!phone){$('newWaDeviceMsg').textContent='Masukkan nomor WhatsApp terlebih dahulu.';return;}
+ if(!confirm('Buat sesi WhatsApp baru dan minta kode pairing untuk nomor '+phone+'? Pastikan nomor tersebut milik Anda.'))return;
+ $('createWaPairCode').disabled=true;
+ $('newWaDeviceMsg').textContent='Membuat device dan meminta kode pairing ke GOWA...';
+ $('waPairCodePanel').hidden=true;
+ stopNewWaPairing();
+ newWaPairDeviceId='';
+ try{
+  const result=await api('/api/admin/whatsapp/pair-code',{
+   method:'POST',
+   body:JSON.stringify({phone})
+  });
+  newWaPairDeviceId=result.deviceId;
+  $('waPairCodeDevice').textContent='Device ID: '+result.deviceId;
+  $('waPairCodeValue').textContent=result.pairCode;
+  $('waPairCodePanel').hidden=false;
+  $('newWaDeviceMsg').textContent=result.message||'Kode pairing berhasil dibuat.';
+  newWaPairTimer=setInterval(checkNewWaPairing,5000);
+  await loadWaDevices();
+ }catch(e){
+  $('newWaDeviceMsg').textContent=e.message;
+ }finally{
+  $('createWaPairCode').disabled=false;
  }
 }
 
@@ -673,6 +717,8 @@ $('checkWa').onclick=refreshWa;
 $('refreshWaDevices').onclick=loadWaDevices;
 $('saveWaDevice').onclick=saveWaDevice;
 $('createWaDevice').onclick=createNewWaDevice;
+$('createWaPairCode').onclick=createWaDeviceWithPairCode;
+$('copyWaPairCode').onclick=()=>GenUI.copy($('waPairCodeValue').textContent);
 $('refreshNewWaQr').onclick=requestNewWaQr;
 $('customers').onclick=async()=>{
  try{$('customerResult').textContent=JSON.stringify(await api('/api/admin/customers'),null,2);}
