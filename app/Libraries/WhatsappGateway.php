@@ -378,12 +378,12 @@ class WhatsappGateway
     public function deletePortalDevice(string $deviceId): array
     {
         if (!preg_match('/^portal-[a-f0-9]{16}$/', $deviceId)) {
-            throw new \\InvalidArgumentException('Hanya device milik Customer Portal yang dapat dihapus.');
+            throw new \InvalidArgumentException('Hanya device milik Customer Portal yang dapat dihapus.');
         }
 
         $config = $this->config();
         if ($config['baseURL'] === '' || empty($config['username']) || empty($config['password'])) {
-            throw new \\RuntimeException('Konfigurasi GOWA belum lengkap.');
+            throw new \RuntimeException('Konfigurasi GOWA belum lengkap.');
         }
 
         $url = $config['baseURL'] . '/devices/' . rawurlencode($deviceId);
@@ -407,7 +407,7 @@ class WhatsappGateway
         curl_close($ch);
 
         if ($body === false) {
-            throw new \\RuntimeException('Tidak dapat menghubungi GOWA untuk menghapus device: ' . $error);
+            throw new \RuntimeException('Tidak dapat menghubungi GOWA untuk menghapus device: ' . $error);
         }
 
         if ($http < 200 || $http >= 300) {
@@ -415,7 +415,7 @@ class WhatsappGateway
                 'status' => $http,
                 'body' => substr((string) $body, 0, 500),
             ]);
-            throw new \\RuntimeException('GOWA gagal menghapus device (HTTP ' . $http . '). Device Portal tidak dilepas dari daftar.');
+            throw new \RuntimeException('GOWA gagal menghapus device (HTTP ' . $http . '). Device Portal tidak dilepas dari daftar.');
         }
 
         return ['httpStatus' => $http];
