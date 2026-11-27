@@ -32,19 +32,48 @@ class AdminController extends BaseController
         $ip = $this->request->getIPAddress();
         $db = db_connect();
 
-        // Five failed attempts for the same username and IP trigger a 5-minute cooldown.
-        $failedAttempts = $db->table('audit_logs')
+        // Lima kegagalan dalam 15 menit memicu jeda login selama 5 menit.
+        // Login sukses menjadi titik reset hitungan kegagalan sebelumnya.
+        $lastSuccess = $db->table('audit_logs')
+            ->select('created_at')
+            ->where('event', 'admin.login_success')
+            ->where('actor', $username)
+            ->where('ip_address', $ip)
+            ->orderBy('id', 'DESC')
+            ->get(1)
+            ->getRowArray();
+
+        $windowStart = date('Y-m-d H:i:s', time() - 900);
+        if ($lastSuccess && $lastSuccess['created_at'] > $windowStart) {
+            $windowStart = $lastSuccess['created_at'];
+        }
+
+        $failedQuery = $db->table('audit_logs')
             ->where('event', 'admin.login_failed')
             ->where('actor', $username)
             ->where('ip_address', $ip)
-            ->where('created_at >=', date('Y-m-d H:i:s', time() - 300))
-            ->countAllResults();
+            ->where('created_at >', $windowStart);
 
-        if ($failedAttempts >= 5) {
-            $this->audit('admin.login_throttled', $username, ['windowSeconds' => 900]);
+        $failedAttempts = (clone $failedQuery)->countAllResults();
+        $latestFailure = $failedQuery
+            ->select('created_at')
+            ->orderBy('id', 'DESC')
+            ->get(1)
+            ->getRowArray();
+
+        $lockUntil = $latestFailure
+            ? strtotime($latestFailure['created_at']) + 300
+            : 0;
+
+        if ($failedAttempts >= 5 && $lockUntil > time()) {
+            $remaining = $lockUntil - time();
+            $this->audit('admin.login_throttled', $username, [
+                'windowSeconds' => 900,
+                'lockSecondsRemaining' => $remaining,
+            ]);
             return $this->json([
                 'success' => false,
-                'message' => 'Terlalu banyak percobaan login. Coba kembali dalam 5 menit.',
+                'message' => 'Terlalu banyak percobaan login. Coba kembali dalam ' . (int) ceil($remaining / 60) . ' menit.',
             ], 429);
         }
 
