@@ -35,6 +35,7 @@ $routes->group('api', static function (RouteCollection $routes): void {
     $routes->put('admin/credentials', 'Api\\AdminController::credentials');
     $routes->get('admin/customers', 'Api\\AdminController::customers');
     $routes->get('admin/logs', 'Api\\AdminController::logs');
+    $routes->get('admin/otp-delivery-logs', 'Api\\AdminController::otpDeliveryLogs');
     $routes->get('admin/whatsapp/devices', 'Api\\AdminController::whatsappDevices');
     $routes->post('admin/whatsapp/hide', 'Api\\AdminController::whatsappHideDevice');
     $routes->post('admin/whatsapp/restore', 'Api\\AdminController::whatsappRestoreDevice');
