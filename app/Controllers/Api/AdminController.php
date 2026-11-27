@@ -56,7 +56,7 @@ class AdminController extends BaseController
             $this->audit('admin.login_failed', $username, ['reason' => 'invalid_credentials']);
             return $this->json([
                 'success' => false,
-                'message' => 'Username atau password salah.'
+                'message' => 'Username atau password salah. Perhatikan: jika salah 5 kali dalam 15 menit, login akan dikunci sementara selama 15 menit.'
             ], 401);
         }
 
