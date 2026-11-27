@@ -128,10 +128,10 @@ small{color:var(--muted)}
    <div class="actions">
     <button type="button" id="createWaDevice">Buat Device &amp; Tampilkan QR</button>
    </div>
-   <div class="field" style="margin-top:16px">
+   <div class="field" style="margin-top:20px;max-width:460px">
     <label for="waPairPhone">Atau pairing menggunakan nomor WhatsApp</label>
-    <input id="waPairPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Contoh: 6281234567890">
-    <small>Masukkan nomor WhatsApp aktif. Nomor 08 akan otomatis diubah menjadi 62.</small>
+    <input id="waPairPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Contoh: 6281234567890" style="display:block;width:100%;max-width:100%;box-sizing:border-box">
+    <small style="display:block;margin-top:8px;line-height:1.5">Masukkan nomor WhatsApp aktif. Nomor 08 akan otomatis diubah menjadi 62.</small>
    </div>
    <div class="actions">
     <button type="button" class="secondary" id="createWaPairCode">Buat Kode Pairing</button>
@@ -432,6 +432,7 @@ async function loadWaDevices(){
 }
 
 let newWaPairDeviceId='';
+let newWaPairMode='qr';
 let newWaPairTimer=null;
 let newWaQrTimer=null;
 let newWaQrSeconds=0;
@@ -488,7 +489,9 @@ async function checkNewWaPairing(){
   if(!device){
    $('newWaDeviceMsg').textContent='Menunggu device muncul di GOWA...';
   }else{
-   $('newWaDeviceMsg').textContent='Menunggu pemindaian QR. Status device: '+device.state;
+   $('newWaDeviceMsg').textContent=newWaPairMode==='phone'
+    ? 'Menunggu konfirmasi kode pairing di WhatsApp. Status device: '+device.state
+    : 'Menunggu pemindaian QR. Status device: '+device.state;
   }
  }catch(e){
   $('newWaDeviceMsg').textContent='Pemeriksaan pairing: '+e.message;
@@ -502,6 +505,8 @@ async function createWaDeviceWithPairCode(){
  $('createWaPairCode').disabled=true;
  $('newWaDeviceMsg').textContent='Membuat device dan meminta kode pairing ke GOWA...';
  $('waPairCodePanel').hidden=true;
+ $('newWaQrPanel').hidden=true;
+ newWaPairMode='phone';
  stopNewWaPairing();
  newWaPairDeviceId='';
  try{
@@ -528,6 +533,8 @@ async function createNewWaDevice(){
  $('createWaDevice').disabled=true;
  $('newWaDeviceMsg').textContent='Membuat slot device baru di GOWA...';
  $('newWaQrPanel').hidden=true;
+ $('waPairCodePanel').hidden=true;
+ newWaPairMode='qr';
  stopNewWaPairing();
  newWaPairDeviceId='';
  try{
