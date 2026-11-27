@@ -387,7 +387,7 @@ class WhatsappGateway
             if (hash_equals($device['id'], $deviceId)) {
                 $known = true;
                 if (strtolower($device['state']) === 'logged_in') {
-                    throw new \\RuntimeException('Sesi WhatsApp device ini sudah berhasil dipasangkan. QR hanya dapat digunakan satu kali sampai sesi di-logout atau dihapus.');
+                    throw new \RuntimeException('Sesi WhatsApp device ini sudah berhasil dipasangkan. QR hanya dapat digunakan satu kali sampai sesi di-logout atau dihapus.');
                 }
                 break;
             }
