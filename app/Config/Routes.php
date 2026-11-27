@@ -36,6 +36,7 @@ $routes->group('api', static function (RouteCollection $routes): void {
     $routes->get('admin/customers', 'Api\\AdminController::customers');
     $routes->get('admin/logs', 'Api\\AdminController::logs');
     $routes->get('admin/whatsapp/devices', 'Api\\AdminController::whatsappDevices');
+    $routes->post('admin/whatsapp/hide', 'Api\\AdminController::whatsappHideDevice');
     $routes->post('admin/whatsapp/create', 'Api\\AdminController::whatsappCreateDevice');
     $routes->post('admin/whatsapp/select', 'Api\\AdminController::whatsappSelectDevice');
     $routes->get('admin/whatsapp/status', 'Api\\AdminController::whatsappStatus');
