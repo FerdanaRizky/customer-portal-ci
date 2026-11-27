@@ -223,8 +223,9 @@ class AuthController extends BaseController
 
             return $this->json([
                 'success' => false,
+                'code' => $isExpired ? 'OTP_EXPIRED' : 'OTP_INVALID',
                 'message' => $isExpired
-                    ? 'Kode OTP sudah kedaluwarsa. Silakan minta kode baru.'
+                    ? 'Kode OTP sudah kedaluwarsa. Silakan kirim ulang kode OTP.'
                     : 'Kode OTP salah.',
             ], 422);
         }
