@@ -351,6 +351,10 @@ class AdminController extends BaseController
                 'success' => true,
                 'devices' => $visibleDevices,
                 'hiddenDeviceIds' => $hidden,
+                'hiddenDevices' => array_values(array_filter(
+                    $allDevices,
+                    static fn ($device) => in_array($device['id'], $hidden, true)
+                )),
                 'selectedDeviceId' => $selected,
                 'hasLoggedInPortalSession' => $hasLoggedInPortalSession,
                 'totalGowaDevices' => count($allDevices),
@@ -408,6 +412,55 @@ class AdminController extends BaseController
                 'message' => 'Device dilepas dari daftar Customer Portal. Sesi GOWA tetap aktif dan tidak dihapus atau di-logout.',
             ]);
         } catch (\Throwable $e) {
+            return $this->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+    }
+
+    public function whatsappRestoreDevice()
+    {
+        if ($r = $this->guard()) {
+            return $r;
+        }
+
+        $data = $this->request->getJSON(true) ?: $this->request->getPost();
+        $deviceId = trim((string) ($data['deviceId'] ?? ''));
+
+        if (!preg_match('/^portal-[a-f0-9]{16}$/', $deviceId)) {
+            return $this->json(['success' => false, 'message' => 'Hanya device milik Customer Portal yang dapat dipulihkan.'], 422);
+        }
+
+        try {
+            $model = new PortalModel();
+            $allDevices = (new WhatsappGateway())->listDevices();
+            $exists = false;
+            foreach ($allDevices as $device) {
+                if (hash_equals($device['id'], $deviceId)) {
+                    $exists = true;
+                    break;
+                }
+            }
+            if (!$exists) {
+                return $this->json(['success' => false, 'message' => 'Device sudah tidak ada di GOWA. Sesi yang dihapus tidak dapat dipulihkan.'], 404);
+            }
+
+            $hidden = json_decode((string) $model->setting('gowa_hidden_devices', '[]'), true);
+            $hidden = is_array($hidden) ? array_values(array_filter($hidden, 'is_string')) : [];
+            if (!in_array($deviceId, $hidden, true)) {
+                return $this->json(['success' => false, 'message' => 'Device ini sudah tampil di daftar Portal.'], 422);
+            }
+
+            $hidden = array_values(array_filter($hidden, static fn ($id) => $id !== $deviceId));
+            $model->saveSetting('gowa_hidden_devices', json_encode($hidden, JSON_THROW_ON_ERROR));
+            $model->log('whatsapp.device_restored', session('admin.username'), [
+                'deviceId' => $deviceId,
+                'action' => 'local_restore_only',
+            ]);
+
+            return $this->json([
+                'success' => true,
+                'message' => 'Device dipulihkan ke daftar Customer Portal. Sesi GOWA tidak diubah.',
+            ]);
+        } catch (\\Throwable $e) {
             return $this->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
     }
