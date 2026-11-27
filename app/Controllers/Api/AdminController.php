@@ -318,6 +318,10 @@ class AdminController extends BaseController
 
         db_connect()->table('admins')->where('id', $row['id'])->update($up);
         session()->set('admin.username', $u);
+        $this->audit('admin.credentials_updated', $u, [
+            'usernameChanged' => $u !== (string) $row['username'],
+            'passwordChanged' => !empty($d['newPassword']),
+        ]);
 
         return $this->json(['success' => true]);
     }
