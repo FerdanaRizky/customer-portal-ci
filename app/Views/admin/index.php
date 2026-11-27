@@ -386,6 +386,28 @@ async function loadWaDevices(){
     portalBox.appendChild(row);
    });
   }
+  const hiddenDevices=Array.isArray(data.hiddenDevices)?data.hiddenDevices:[];
+  if(hiddenDevices.length){
+   const hiddenHeading=document.createElement('strong');
+   hiddenHeading.textContent='Device yang dilepas dari Portal';
+   hiddenHeading.style.display='block';
+   hiddenHeading.style.marginTop='14px';
+   portalBox.appendChild(hiddenHeading);
+   hiddenDevices.forEach(device=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--border)';
+    const info=document.createElement('span');
+    info.textContent=(device.displayName||device.id)+' — '+device.state;
+    row.appendChild(info);
+    const restore=document.createElement('button');
+    restore.type='button';
+    restore.className='secondary';
+    restore.textContent='Pulihkan ke Portal';
+    restore.addEventListener('click',()=>restoreWaDevice(device.id));
+    row.appendChild(restore);
+    portalBox.appendChild(row);
+   });
+  }
   msg.textContent='Daftar berhasil disinkronkan.';
  }catch(e){
   select.replaceChildren(new Option('Gagal memuat daftar device',''));
@@ -481,6 +503,20 @@ async function createNewWaDevice(){
   $('newWaDeviceMsg').textContent=e.message;
  }finally{
   $('createWaDevice').disabled=false;
+ }
+}
+
+async function restoreWaDevice(deviceId){
+ if(!confirm('Pulihkan '+deviceId+' ke daftar Customer Portal? Sesi GOWA tidak akan diubah.'))return;
+ try{
+  const result=await api('/api/admin/whatsapp/restore',{
+   method:'POST',
+   body:JSON.stringify({deviceId})
+  });
+  $('waDevicesMsg').textContent=result.message||'Device dipulihkan ke Portal.';
+  await loadWaDevices();
+ }catch(e){
+  $('waDevicesMsg').textContent=e.message;
  }
 }
 
