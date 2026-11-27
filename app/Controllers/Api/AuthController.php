@@ -73,11 +73,20 @@ class AuthController extends BaseController
         try {
             $device = $this->findCustomerDevice($phone);
         } catch (\Throwable $e) {
-            $this->logOtpDelivery($phone, 'system_error', 'GenieACS tidak dapat dihubungi.');
             log_message('error', 'GenieACS request OTP error: {error}', [
                 'error' => $e->getMessage(),
             ]);
 
+            if (str_contains($e->getMessage(), 'lebih dari satu pemetaan perangkat')) {
+                $this->logOtpDelivery($phone, 'mapping_conflict', 'Nomor memiliki lebih dari satu pemetaan perangkat.');
+                return $this->json([
+                    'success' => false,
+                    'code' => 'CUSTOMER_MAPPING_CONFLICT',
+                    'message' => 'Nomor WhatsApp terhubung ke lebih dari satu perangkat. Silakan hubungi administrator untuk memperbaiki pemetaan.',
+                ], 409);
+            }
+
+            $this->logOtpDelivery($phone, 'system_error', 'GenieACS tidak dapat dihubungi.');
             return $this->json([
                 'success' => false,
                 'message' => 'Layanan GenieACS sedang tidak dapat dihubungi. Silakan coba lagi.',
@@ -216,6 +225,14 @@ class AuthController extends BaseController
             log_message('error', 'GenieACS OTP verification error: {error}', [
                 'error' => $e->getMessage(),
             ]);
+
+            if (str_contains($e->getMessage(), 'lebih dari satu pemetaan perangkat')) {
+                return $this->json([
+                    'success' => false,
+                    'code' => 'CUSTOMER_MAPPING_CONFLICT',
+                    'message' => 'Nomor WhatsApp terhubung ke lebih dari satu perangkat. Silakan hubungi administrator.',
+                ], 409);
+            }
 
             return $this->json([
                 'success' => false,
