@@ -80,19 +80,68 @@ class GenieAcsClient
         return is_array($decoded) ? $decoded : ['raw' => $body];
     }
 
+    /**
+     * Cari perangkat berdasarkan tag customer dan pastikan pemetaannya unik.
+     * Jangan pernah mengambil perangkat pertama jika satu nomor terpasang
+     * pada lebih dari satu perangkat GenieACS.
+     */
     public function findDeviceByPhone(string $phone): ?array
     {
-        $filter = rawurlencode(json_encode([
-            '_tags' => ['customer:' . $phone],
-        ]));
+        $tag = 'customer:' . $phone;
+        $filter = rawurlencode(json_encode(['_tags' => [$tag]]));
 
         $result = $this->request(
             'GET',
             'devices/?query=' . $filter .
-            '&projection=_id,_deviceId,_lastInform,InternetGatewayDevice'
+            '&projection=_id,_deviceId,_tags,_lastInform,InternetGatewayDevice'
         );
 
-        return $result[0] ?? null;
+        $matches = array_values(array_filter(
+            $result,
+            static fn ($device) =>
+                is_array($device) &&
+                !empty($device['_id']) &&
+                in_array($tag, $device['_tags'] ?? [], true)
+        ));
+
+        if (count($matches) > 1) {
+            throw new RuntimeException(
+                'Nomor WhatsApp memiliki lebih dari satu pemetaan perangkat di GenieACS.'
+            );
+        }
+
+        return $matches[0] ?? null;
+    }
+
+    /**
+     * Validasi bahwa perangkat pada sesi pelanggan masih ada dan masih
+     * memiliki tag nomor WhatsApp yang sama.
+     */
+    public function findDeviceByIdAndPhone(string $deviceId, string $phone): ?array
+    {
+        if ($deviceId === '' || $phone === '') {
+            return null;
+        }
+
+        $tag = 'customer:' . $phone;
+        $filter = rawurlencode(json_encode(['_id' => $deviceId]));
+
+        $result = $this->request(
+            'GET',
+            'devices/?query=' . $filter . '&projection=_id,_tags'
+        );
+
+        $device = $result[0] ?? null;
+
+        if (
+            !is_array($device) ||
+            (string) ($device['_id'] ?? '') !== $deviceId ||
+            !in_array($tag, $device['_tags'] ?? [], true)
+        ) {
+            return null;
+        }
+
+        return $device;
     }
 
     public function command(string $deviceId, string $name, array $parameters = []): array
