@@ -20,7 +20,7 @@ class AdminController extends BaseController
     {
         try {
             (new PortalModel())->log($event, $actor, $detail);
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             log_message('error', 'Admin audit write failed: {error}', ['error' => $e->getMessage()]);
         }
     }
