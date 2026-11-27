@@ -452,14 +452,20 @@ class WhatsappGateway
         if (!$base || !$qrUrl || empty($qrUrl['path'])) {
             throw new \RuntimeException('Alamat QR GOWA tidak valid.');
         }
-        if (isset($qrUrl['host']) && (
-            strtolower($qrUrl['host']) !== strtolower($base['host'] ?? '') ||
-            strtolower($qrUrl['scheme'] ?? '') !== strtolower($base['scheme'] ?? '')
-        )) {
-            throw new \RuntimeException('Host gambar QR tidak sesuai dengan GOWA.');
+        // GOWA dapat mengembalikan qr_link dengan hostname internal/container.
+        // Ambil hanya path dan query, lalu selalu unduh melalui host GOWA tepercaya
+        // dari konfigurasi Portal. Jangan pernah melakukan request ke host dari qr_link.
+        $qrPath = (string) $qrUrl['path'];
+        if (
+            !str_starts_with($qrPath, '/') ||
+            str_starts_with($qrPath, '//') ||
+            str_contains($qrPath, chr(92)) ||
+            preg_match('/[\\x00-\\x1F\\x7F]/', $qrPath)
+        ) {
+            throw new \\RuntimeException('Path gambar QR GOWA tidak valid.');
         }
 
-        $imageUrl = $config['baseURL'] . $qrUrl['path']
+        $imageUrl = $config['baseURL'] . $qrPath
             . (isset($qrUrl['query']) ? '?' . $qrUrl['query'] : '');
         $ch = curl_init($imageUrl);
         curl_setopt_array($ch, [
