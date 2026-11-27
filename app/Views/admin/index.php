@@ -103,10 +103,21 @@ small{color:var(--muted)}
   </div>
 
   <div class="card">
-   <h2>Informasi Koneksi</h2>
-   <p class="muted">Pengaturan URL, device ID, dan kredensial GOWA berada di tab Pengaturan.</p>
-   <p class="muted">Device <strong>billing</strong> digunakan bersama layanan lain. Panel ini tidak menghapus device atau melakukan logout otomatis.</p>
-   <p class="muted">Fitur QR dan sambungkan ulang akan ditambahkan setelah endpoint login GOWA diverifikasi.</p>
+   <h2>Daftar Device WhatsApp</h2>
+   <p class="muted">Daftar disinkronkan langsung dari GOWA. Pilih device yang akan digunakan Portal untuk mengirim pesan.</p>
+   <div class="field">
+    <label for="waDeviceSelect">Device aktif untuk Customer Portal</label>
+    <select id="waDeviceSelect" style="display:block;width:100%;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:9px;color:var(--text)">
+     <option value="">Memuat daftar device...</option>
+    </select>
+   </div>
+   <div class="actions">
+    <button type="button" id="refreshWaDevices" class="secondary">Muat Ulang Daftar</button>
+    <button type="button" id="saveWaDevice">Gunakan Device Ini</button>
+   </div>
+   <p class="message" id="waDevicesMsg"></p>
+   <div id="waDevicesList" class="muted"></div>
+   <p class="muted">Memilih device hanya mengubah device pengiriman Portal. Device GOWA tidak dihapus, tidak logout, dan tidak dipasangkan ulang. Device <strong>billing</strong> tetap dibiarkan aktif untuk layanan lain.</p>
   </div>
  </section>
 
@@ -148,7 +159,7 @@ small{color:var(--muted)}
    <h2>WhatsApp GOWA</h2>
    <div class="row">
     <div class="field"><label>URL GOWA</label><input id="gowaBaseUrl" type="url" placeholder="https://wa.example.com"></div>
-    <div class="field"><label>Device ID</label><input id="gowaDeviceId" type="text"></div>
+    <div class="field"><label>Device aktif untuk Portal</label><input id="gowaDeviceId" type="text" readonly><small>Pilih device melalui tab WhatsApp.</small></div>
    </div>
    <div class="row">
     <div class="field"><label>Username GOWA</label><input id="gowaUsername" type="text" autocomplete="off" placeholder="Kosongkan jika tidak ingin mengubah"></div>
@@ -290,6 +301,63 @@ async function init(){
  $('currentAdminUsername').value=d.admin?.username||'';
  $('newUsername').value=d.admin?.username||'';
  await loadSettings();
+ await loadWaDevices();
+}
+
+
+async function loadWaDevices(){
+ const select=$('waDeviceSelect');
+ const msg=$('waDevicesMsg');
+ select.replaceChildren(new Option('Memuat daftar device...', ''));
+ msg.textContent='Mengambil daftar dari GOWA...';
+ try{
+  const data=await api('/api/admin/whatsapp/devices');
+  const devices=Array.isArray(data.devices)?data.devices:[];
+  const selected=data.selectedDeviceId||'';
+  select.replaceChildren();
+  if(!devices.length){
+   select.add(new Option('Tidak ada device ditemukan',''));
+  }
+  devices.forEach(device=>{
+   const state=String(device.state||'unknown');
+   const label=(device.displayName||device.id)+' ('+device.id+') — '+state;
+   select.add(new Option(label,device.id));
+  });
+  select.value=selected;
+  if(select.value!==selected && selected){
+   select.add(new Option(selected+' (tidak ditemukan di GOWA)',selected));
+   select.value=selected;
+  }
+  $('waDevicesList').textContent=devices.length
+   ? devices.length+' device ditemukan di GOWA.'
+   : 'Belum ada device di GOWA.';
+  msg.textContent='Daftar berhasil disinkronkan.';
+ }catch(e){
+  select.replaceChildren(new Option('Gagal memuat daftar device',''));
+  $('waDevicesList').textContent='';
+  msg.textContent=e.message;
+ }
+}
+
+async function saveWaDevice(){
+ const deviceId=$('waDeviceSelect').value;
+ if(!deviceId){$('waDevicesMsg').textContent='Pilih device terlebih dahulu.';return;}
+ $('saveWaDevice').disabled=true;
+ $('waDevicesMsg').textContent='Menyimpan pilihan device...';
+ try{
+  await api('/api/admin/whatsapp/select',{
+   method:'POST',
+   body:JSON.stringify({deviceId})
+  });
+  $('gowaDeviceId').value=deviceId;
+  $('waStatusDevice').value=deviceId;
+  $('waDevicesMsg').textContent='Device '+deviceId+' berhasil dipilih untuk Portal.';
+  await refreshWa();
+ }catch(e){
+  $('waDevicesMsg').textContent=e.message;
+ }finally{
+  $('saveWaDevice').disabled=false;
+ }
 }
 
 let waRefreshInFlight=false;
@@ -407,6 +475,8 @@ $('saveCredentials').onclick=async()=>{
 };
 
 $('checkWa').onclick=refreshWa;
+$('refreshWaDevices').onclick=loadWaDevices;
+$('saveWaDevice').onclick=saveWaDevice;
 $('customers').onclick=async()=>{
  try{$('customerResult').textContent=JSON.stringify(await api('/api/admin/customers'),null,2);}
  catch(e){$('customerResult').textContent=e.message;}
