@@ -374,7 +374,7 @@ async function loadWaDevices(){
      const hide=document.createElement('button');
      hide.type='button';
      hide.className='secondary';
-     hide.textContent='Lepas dari Portal';
+     hide.textContent='Hapus Device';
      hide.addEventListener('click',()=>hideWaDevice(device.id));
      row.appendChild(hide);
     }else{
@@ -521,13 +521,13 @@ async function restoreWaDevice(deviceId){
 }
 
 async function hideWaDevice(deviceId){
- if(!confirm('Lepas '+deviceId+' dari daftar Customer Portal? Sesi GOWA tidak akan dihapus atau di-logout.'))return;
+ if(!confirm('Hapus '+deviceId+' beserta sesi WhatsApp-nya dari GOWA? Tindakan ini akan memutus sesi device tersebut. Device billing tidak akan terpengaruh.'))return;
  try{
   const result=await api('/api/admin/whatsapp/hide',{
    method:'POST',
    body:JSON.stringify({deviceId})
   });
-  $('waDevicesMsg').textContent=result.message||'Device dilepas dari daftar Portal.';
+  $('waDevicesMsg').textContent=result.message||'Device dan sesi WhatsApp berhasil dihapus dari GOWA.';
   await loadWaDevices();
  }catch(e){
   $('waDevicesMsg').textContent=e.message;
