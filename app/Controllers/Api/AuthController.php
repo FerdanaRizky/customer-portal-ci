@@ -116,10 +116,11 @@ class AuthController extends BaseController
         $db = db_connect();
         $now = date('Y-m-d H:i:s');
 
-        // Batasi pengiriman per nomor, termasuk setelah OTP lama berhasil dipakai.
+        // Cooldown dihitung dari upaya pengiriman nyata, bukan log penolakan
+        // agar klik berulang saat cooldown tidak memperpanjang waktu tunggu.
         $recentPhoneRequest = $db->table('otp_delivery_logs')
             ->where('phone', $phone)
-            ->whereIn('status', ['sent', 'failed', 'rate_limited'])
+            ->whereIn('status', ['sent', 'failed'])
             ->where('created_at >', date('Y-m-d H:i:s', time() - 60))
             ->countAllResults();
 
@@ -132,6 +133,9 @@ class AuthController extends BaseController
         }
 
         $otp = (string) random_int(100000, 999999);
+
+        // Hanya satu OTP aktif per nomor: OTP baru menggantikan kode sebelumnya.
+        $db->table('otp_codes')->where('phone', $phone)->delete();
 
         $db->table('otp_codes')->insert([
             'phone' => $phone,
@@ -191,47 +195,65 @@ class AuthController extends BaseController
 
         $db = db_connect();
 
-        // Ambil OTP terbaru untuk nomor tersebut.
-        $record = $db->table('otp_codes')
-            ->where('phone', $phone)
-            ->orderBy('id', 'DESC')
-            ->get()
-            ->getRowArray();
+        // Lock the newest OTP row so simultaneous verification requests cannot reuse it.
+        $db->transBegin();
+        try {
+            $record = $db->query(
+                'SELECT * FROM otp_codes WHERE phone = ? ORDER BY id DESC LIMIT 1 FOR UPDATE',
+                [$phone]
+            )->getRowArray();
 
-        if (!$record) {
+            if (!$record) {
+                $db->transRollback();
+                return $this->json([
+                    'success' => false,
+                    'message' => 'OTP tidak ditemukan. Silakan minta kode baru.',
+                ], 422);
+            }
+
+            $attempts = (int) $record['attempts'];
+
+            if ($attempts >= 3) {
+                $db->transCommit();
+                return $this->json([
+                    'success' => false,
+                    'message' => 'Batas percobaan OTP tercapai. Silakan minta kode baru.',
+                ], 422);
+            }
+
+            $isExpired = strtotime($record['expires_at']) < time();
+            $isCorrect = password_verify($otp, $record['otp_hash']);
+
+            if ($isExpired || !$isCorrect) {
+                $db->table('otp_codes')
+                    ->where('id', $record['id'])
+                    ->update(['attempts' => $attempts + 1]);
+                $db->transCommit();
+
+                return $this->json([
+                    'success' => false,
+                    'code' => $isExpired ? 'OTP_EXPIRED' : 'OTP_INVALID',
+                    'message' => $isExpired
+                        ? 'Kode OTP sudah kedaluwarsa. Silakan kirim ulang kode OTP.'
+                        : 'Kode OTP salah.',
+                ], 422);
+            }
+
+            // Consume OTP atomically before proceeding; a second request cannot reuse it.
+            $db->table('otp_codes')->where('id', $record['id'])->delete();
+            $db->transCommit();
+        } catch (\Throwable $e) {
+            $db->transRollback();
+            log_message('error', 'OTP verification transaction failed: {error}', [
+                'error' => $e->getMessage(),
+            ]);
             return $this->json([
                 'success' => false,
-                'message' => 'OTP tidak ditemukan. Silakan minta kode baru.',
-            ], 422);
+                'message' => 'Terjadi gangguan saat memverifikasi OTP. Silakan coba kembali.',
+            ], 503);
         }
 
-        $attempts = (int) $record['attempts'];
-
-        if ($attempts >= 3) {
-            return $this->json([
-                'success' => false,
-                'message' => 'Batas percobaan OTP tercapai. Silakan minta kode baru.',
-            ], 422);
-        }
-
-        $isExpired = strtotime($record['expires_at']) < time();
-        $isCorrect = password_verify($otp, $record['otp_hash']);
-
-        if ($isExpired || !$isCorrect) {
-            $db->table('otp_codes')
-                ->where('id', $record['id'])
-                ->update(['attempts' => $attempts + 1]);
-
-            return $this->json([
-                'success' => false,
-                'code' => $isExpired ? 'OTP_EXPIRED' : 'OTP_INVALID',
-                'message' => $isExpired
-                    ? 'Kode OTP sudah kedaluwarsa. Silakan kirim ulang kode OTP.'
-                    : 'Kode OTP salah.',
-            ], 422);
-        }
-
-        // Periksa kembali tag GenieACS sebelum membuat sesi login.
+        // Re-check the GenieACS customer mapping after the OTP has been consumed.
         try {
             $device = $this->findCustomerDevice($phone);
         } catch (\Throwable $e) {
@@ -254,8 +276,6 @@ class AuthController extends BaseController
         }
 
         if (!$device || empty($device['_id'])) {
-            $db->table('otp_codes')->where('id', $record['id'])->delete();
-
             return $this->json([
                 'success' => false,
                 'message' => 'Nomor tidak lagi terdaftar di GenieACS.',
@@ -266,7 +286,6 @@ class AuthController extends BaseController
         $name = $this->deviceName($device, $phone);
 
         session()->regenerate(true);
-
         session()->set('customer', [
             'id' => $deviceId,
             'phone' => $phone,
@@ -274,8 +293,6 @@ class AuthController extends BaseController
             'deviceId' => $deviceId,
         ]);
 
-        // OTP hanya dapat digunakan satu kali.
-        $db->table('otp_codes')->where('id', $record['id'])->delete();
         $this->auditAuth('customer.login_success', $phone);
 
         return $this->json([
