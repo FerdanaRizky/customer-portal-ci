@@ -9,6 +9,11 @@ $routes = Services::routes();
 $routes->get('/', 'PortalController::index');
 $routes->get('login', 'PortalController::index');
 $routes->get('admin', 'AdminController::index');
+$routes->get('admin/akun', 'AdminController::index');
+$routes->get('admin/pengaturan', 'AdminController::index');
+$routes->get('admin/status-sistem', 'AdminController::index');
+$routes->get('admin/whatsapp', 'AdminController::index');
+$routes->get('admin/dashboard', 'AdminController::index');
 $routes->get('dashboard', 'PortalController::dashboard');
 
 $routes->group('api', static function (RouteCollection $routes): void {
@@ -37,6 +42,7 @@ $routes->group('api', static function (RouteCollection $routes): void {
     $routes->delete('admin/logo', 'Api\\AdminController::deleteLogo');
     $routes->put('admin/credentials', 'Api\\AdminController::credentials');
     $routes->get('admin/customers', 'Api\\AdminController::customers');
+    $routes->get('admin/genieacs/devices', 'Api\\AdminController::genieacsDevices');
     $routes->get('admin/logs', 'Api\\AdminController::logs');
     $routes->get('admin/otp-delivery-logs', 'Api\\AdminController::otpDeliveryLogs');
     $routes->get('admin/whatsapp/devices', 'Api\\AdminController::whatsappDevices');

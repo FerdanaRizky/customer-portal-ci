@@ -141,6 +141,160 @@ small{color:var(--muted)}
  .monitor-value{font-size:22px}
 }
 
+
+/* Admin sidebar */
+#panel{max-width:none}
+.admin-shell{
+ display:grid;grid-template-columns:245px minmax(0,1fr);
+ gap:22px;align-items:start;min-height:calc(100vh - 36px)
+}
+.admin-sidebar{
+ position:sticky;top:18px;min-width:0;
+ background:var(--surface);border:1px solid var(--border);
+ border-radius:16px;padding:18px 12px
+}
+.sidebar-brand{padding:8px 12px 20px;border-bottom:1px solid var(--border);margin-bottom:14px}
+.sidebar-brand strong{font-size:17px;display:block}
+.sidebar-brand small{display:block;margin-top:5px}
+.admin-sidebar .tabs{display:flex;flex-direction:column;gap:6px;padding:0;overflow:visible}
+.admin-sidebar .tab{
+ width:100%;display:flex;align-items:center;gap:12px;
+ text-align:left;padding:12px 13px;border:1px solid transparent;
+ background:transparent;color:var(--muted);border-radius:10px
+}
+.admin-sidebar .tab:hover{background:var(--surface2);color:var(--text)}
+.admin-sidebar .tab.active{
+ background:rgba(22,196,176,.13);color:var(--accent);
+ border-color:rgba(22,196,176,.22)
+}
+.nav-icon{width:22px;text-align:center;font-size:18px;flex:none}
+.admin-content{min-width:0}
+.admin-content>header{margin:0 0 18px;padding:5px 0}
+.mobile-menu{display:none}
+@media(max-width:760px){
+ .wrap{padding:12px}
+ .admin-shell{display:block;min-height:0}
+ .admin-sidebar{
+  display:none;position:fixed;z-index:1000;top:12px;bottom:12px;
+  left:12px;width:min(280px,calc(100vw - 48px));
+  overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.45)
+ }
+ .admin-sidebar.open{display:block}
+ .admin-content>header{align-items:center;gap:10px}
+ .mobile-menu{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:42px;height:42px;padding:0;flex:none;
+  background:var(--surface2);border:1px solid var(--border);
+  color:var(--text);font-size:20px
+ }
+ .admin-content>header>div{flex:1;min-width:0}
+ .admin-content>header h1{font-size:18px}
+ .admin-content .card{margin:12px 0}
+}
+
+
+/* Dashboard customer table */
+.dashboard-customers{min-width:0}
+.customer-heading{
+ display:flex;align-items:center;justify-content:space-between;
+ gap:14px;flex-wrap:wrap
+}
+.customer-heading h2{margin-bottom:5px}
+.customer-heading p{margin:0}
+.customer-summary{
+ display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+ gap:12px;margin:20px 0
+}
+.customer-summary>div{
+ display:flex;flex-direction:column;gap:7px;
+ padding:15px;background:var(--surface2);
+ border:1px solid var(--border);border-radius:11px;min-width:0
+}
+.customer-summary strong{font-size:21px;color:var(--text)}
+.customer-toolbar{margin:14px 0}
+.customer-toolbar input{
+ width:100%;min-width:0;padding:12px;
+ background:var(--bg);border:1px solid var(--border);
+ border-radius:9px;color:var(--text);outline:none
+}
+.customer-toolbar input:focus{border-color:var(--accent)}
+.customer-table-wrap{
+ width:100%;overflow-x:auto;border:1px solid var(--border);
+ border-radius:10px;margin-top:12px
+}
+.customer-table{
+ width:100%;min-width:760px;border-collapse:collapse;font-size:13px
+}
+.customer-table th,.customer-table td{
+ padding:12px;text-align:left;vertical-align:middle;
+ border-bottom:1px solid var(--border)
+}
+.customer-table th{
+ background:var(--surface2);color:var(--muted);
+ font-weight:700;white-space:nowrap
+}
+.customer-table tbody tr:last-child td{border-bottom:0}
+.customer-table tbody tr:hover{background:rgba(22,196,176,.045)}
+.customer-device{overflow-wrap:anywhere;max-width:220px}
+.customer-status{
+ display:inline-block;padding:4px 9px;border-radius:20px;
+ font-size:12px;font-weight:700;white-space:nowrap
+}
+.customer-status.active{background:#14532d;color:#bbf7d0}
+.customer-status.inactive{background:#7f1d1d;color:#fecaca}
+.customer-table-info{font-size:12px;color:var(--muted);margin:12px 0}
+.customer-empty{
+ padding:22px;text-align:center;color:var(--muted);
+ background:var(--surface2);border-radius:10px;margin-top:12px
+}
+.customer-error{color:#fca5a5}
+@media(max-width:600px){
+ .customer-summary{grid-template-columns:1fr 1fr}
+ .customer-heading{align-items:flex-start}
+ .customer-heading button{width:100%}
+}
+
+
+.customer-pagination{
+ display:flex;align-items:center;justify-content:center;
+ gap:14px;margin:16px 0;flex-wrap:wrap
+}
+.customer-pagination span{font-size:13px;color:var(--muted)}
+.customer-pagination button:disabled{opacity:.45;cursor:not-allowed}
+
+
+/* DASHBOARD GENIEACS TABLE RESPONSIVE */
+.customer-table-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+}
+
+.customer-table {
+    width: 100%;
+    min-width: 950px;
+    border-collapse: collapse;
+}
+
+.customer-table th,
+.customer-table td {
+    white-space: nowrap;
+}
+
+.customer-table td.customer-device {
+    white-space: normal;
+    min-width: 180px;
+    max-width: 260px;
+    overflow-wrap: anywhere;
+}
+
+.customer-table th:last-child,
+.customer-table td:last-child {
+    min-width: 190px;
+}
+
 </style>
 </head>
 <body>
@@ -163,11 +317,12 @@ small{color:var(--muted)}
  </header>
 
  <nav class="tabs" aria-label="Menu Admin">
-  <button class="tab active" data-tab="whatsapp">WhatsApp</button>
-  <button class="tab" data-tab="health">Status Sistem</button>
-  <button class="tab" data-tab="settings">Pengaturan</button>
-  <button class="tab" data-tab="account">Akun</button>
- </nav>
+   <button type="button" class="tab active" data-tab="dashboard"><span class="nav-icon">⌂</span> Dashboard</button>
+   <button type="button" class="tab" data-tab="whatsapp"><span class="nav-icon">◉</span> WhatsApp</button>
+   <button type="button" class="tab" data-tab="health"><span class="nav-icon">⌁</span> Status Sistem</button>
+   <button type="button" class="tab" data-tab="settings"><span class="nav-icon">⚙</span> Pengaturan</button>
+   <button type="button" class="tab" data-tab="account"><span class="nav-icon">♙</span> Akun</button>
+  </nav>
 
  <section class="tab-panel" id="tab-health" hidden>
   <div class="card">
@@ -394,10 +549,41 @@ small{color:var(--muted)}
   </div>
  </section>
 
- <section class="card">
-  <h2>Data Pelanggan</h2>
-  <button class="secondary" id="customers">Muat Pelanggan</button>
-  <pre id="customerResult"></pre>
+ <section class="card dashboard-customers">
+  <div class="customer-heading">
+   <div>
+    <h2>Data Pelanggan</h2>
+    <p class="muted">Daftar perangkat yang terdaftar langsung di GenieACS.</p>
+   </div>
+   <button type="button" class="secondary" id="customers">↻ Muat Ulang</button>
+  </div>
+
+  <div class="customer-summary">
+   <div>
+    <span class="muted">Perangkat pada halaman</span>
+    <strong id="customerCount">0</strong>
+   </div>
+   <div>
+    <span class="muted">Status data</span>
+    <strong id="customerLoadStatus">Belum dimuat</strong>
+   </div>
+  </div>
+
+  <div class="customer-toolbar">
+   <input type="search" id="customerSearch"
+    placeholder="Cari nomor WhatsApp, Device ID, model, atau serial number..."
+    aria-label="Cari pelanggan">
+  </div>
+
+
+  <div class="customer-pagination">
+   <button type="button" class="secondary" id="customerPrev" disabled>Sebelumnya</button>
+   <span id="customerPageInfo">Halaman 1</span>
+   <button type="button" class="secondary" id="customerNext" disabled>Berikutnya</button>
+  </div>
+  <div id="customerResult" aria-live="polite">
+   <div class="customer-empty">Memuat data pelanggan...</div>
+  </div>
  </section>
 
  <section class="card">
@@ -481,13 +667,125 @@ function setLogo(url){
  }
 }
 
-function activateTab(name){
- document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
- document.querySelectorAll('.tab-panel').forEach(p=>p.hidden=p.id!=='tab-'+name);
-}
- if(name==='health') loadSystemHealth();
+const adminRoutes={
+ dashboard:'/admin/dashboard',
+ whatsapp:'/admin/whatsapp',
+ health:'/admin/status-sistem',
+ settings:'/admin/pengaturan',
+ account:'/admin/akun'
+};
 
-document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>activateTab(b.dataset.tab)));
+function activateTab(name, updateUrl=true){
+ if(!adminRoutes[name]) name='dashboard';
+
+ document.querySelectorAll('.tab').forEach(button=>{
+  button.classList.toggle('active',button.dataset.tab===name);
+ });
+
+ document.querySelectorAll('.tab-panel').forEach(panel=>{
+  panel.hidden=panel.id!=='tab-'+name;
+ });
+
+ if(updateUrl && location.pathname!==adminRoutes[name]){
+  history.pushState({adminTab:name},'',adminRoutes[name]);
+ }
+
+ const sidebar=document.querySelector('.admin-sidebar');
+ if(sidebar) sidebar.classList.remove('open');
+
+ if(name==='health'){
+  loadSystemHealth();
+  loadMonitoringMetrics();
+  loadApplicationLogs();
+ }else if(name==='whatsapp'){
+  loadWaDevices();
+ }
+}
+
+function setupAdminLayout(){
+ const panel=$('panel');
+ if(!panel || panel.dataset.layoutReady==='1') return;
+
+ const header=panel.querySelector(':scope > header');
+ const nav=panel.querySelector(':scope > nav.tabs');
+ if(!header || !nav) return;
+
+ const shell=document.createElement('div');
+ shell.className='admin-shell';
+
+ const sidebar=document.createElement('aside');
+ sidebar.className='admin-sidebar';
+
+ const brand=document.createElement('div');
+ brand.className='sidebar-brand';
+ brand.innerHTML='<strong>Customer Portal</strong><small>Administrator Panel</small>';
+
+ const content=document.createElement('div');
+ content.className='admin-content';
+
+ const menuButton=document.createElement('button');
+ menuButton.type='button';
+ menuButton.className='mobile-menu';
+ menuButton.textContent='☰';
+ menuButton.setAttribute('aria-label','Buka menu');
+
+ header.insertBefore(menuButton,header.firstChild);
+
+ sidebar.append(brand,nav);
+ shell.append(sidebar,content);
+ panel.appendChild(shell);
+ content.appendChild(header);
+
+ const dashboard=document.createElement('section');
+ dashboard.className='tab-panel';
+ dashboard.id='tab-dashboard';
+
+ const dashboardCards=[...panel.querySelectorAll(':scope > section.card')];
+ dashboardCards.forEach(section=>dashboard.appendChild(section));
+ content.appendChild(dashboard);
+
+ [...panel.children].forEach(element=>{
+  if(element!==shell) content.appendChild(element);
+ });
+
+ menuButton.addEventListener('click',()=>{
+  sidebar.classList.toggle('open');
+ });
+
+ document.addEventListener('click',event=>{
+  if(window.innerWidth<=760 &&
+     sidebar.classList.contains('open') &&
+     !sidebar.contains(event.target) &&
+     !menuButton.contains(event.target)){
+   sidebar.classList.remove('open');
+  }
+ });
+
+ nav.querySelectorAll('.tab').forEach(button=>{
+  button.addEventListener('click',()=>{
+   activateTab(button.dataset.tab);
+  });
+ });
+
+ function tabFromPath(){
+  const path=location.pathname.replace(/\/+$/,'');
+  return Object.keys(adminRoutes).find(
+   key=>adminRoutes[key]===path
+  ) || 'dashboard';
+ }
+
+ if(location.pathname.replace(/\/+$/,'')==='/admin'){
+  history.replaceState({adminTab:'dashboard'},'','/admin/dashboard');
+ }
+
+ activateTab(tabFromPath(),false);
+
+ window.addEventListener('popstate',()=>{
+  activateTab(tabFromPath(),false);
+ });
+
+ panel.dataset.layoutReady='1';
+}
 
 async function loadSettings(){
  const d=await api('/api/admin/settings');
@@ -519,6 +817,7 @@ async function init(){
  $('currentAdminUsername').value=d.admin?.username||'';
  $('newUsername').value=d.admin?.username||'';
  await loadSettings();
+  await loadCustomers();
  await loadSystemHealth();
  await loadWaDevices();
  await loadOtpDeliveryLogs();
@@ -1188,10 +1487,117 @@ $('requestWaPairCode').onclick=requestWaPairCode;
 $('backToWaQr').onclick=backToWaQr;
 $('copyWaPairCode').onclick=()=>GenUI.copy($('waPairCodeValue').textContent);
 $('refreshNewWaQr').onclick=requestNewWaQr;
-$('customers').onclick=async()=>{
- try{$('customerResult').textContent=JSON.stringify(await api('/api/admin/customers'),null,2);}
- catch(e){$('customerResult').textContent=e.message;}
-};
+let customerCache=[];
+let customerPage=1;
+let customerHasMore=false;
+const customerPerPage=25;
+
+function renderCustomers(){
+ const result=$('customerResult');
+ const query=$('customerSearch').value.trim().toLowerCase();
+
+ const filtered=customerCache.filter(item=>{
+  const searchable=[
+   item.phone,
+   item.id,
+   item.manufacturer,
+   item.model,
+   item.serialNumber
+  ].join(' ').toLowerCase();
+
+  return searchable.includes(query);
+ });
+
+ $('customerCount').textContent=customerCache.length;
+ $('customerLoadStatus').textContent='Halaman '+customerPage;
+
+ if(!filtered.length){
+  result.innerHTML='<div class="customer-empty">'+
+   (query?'Tidak ada perangkat yang cocok pada halaman ini.':
+   'Belum ada perangkat pada halaman ini.')+
+   '</div>';
+ }else{
+  const rows=filtered.map(item=>{
+   let lastInform='-';
+   if(item.lastInform){
+    const date=new Date(item.lastInform);
+    if(!Number.isNaN(date.getTime())){
+     lastInform=date.toLocaleString('id-ID');
+    }
+   }
+
+   return '<tr>'+
+    '<td><strong>'+escapeOtpHtml(item.phone||'-')+'</strong></td>'+
+    '<td class="customer-device">'+escapeOtpHtml(item.id||'-')+'</td>'+
+    '<td>'+escapeOtpHtml(item.manufacturer||'-')+'</td>'+
+    '<td>'+escapeOtpHtml(item.model||'-')+'</td>'+
+    '<td>'+escapeOtpHtml(item.serialNumber||'-')+'</td>'+
+    '<td>'+escapeOtpHtml(lastInform)+'</td>'+
+   '</tr>';
+  }).join('');
+
+  result.innerHTML=
+   '<div class="customer-table-info">Menampilkan '+
+   filtered.length+' dari '+customerCache.length+
+   ' perangkat pada halaman ini. Pencarian berlaku pada halaman aktif.</div>'+
+   '<div class="customer-table-wrap">'+
+    '<table class="customer-table">'+
+     '<thead><tr>'+
+      '<th>Nomor WhatsApp</th><th>Device ID</th>'+
+      '<th>Manufacturer</th><th>Model</th>'+
+      '<th>Serial Number</th><th>Last Inform</th>'+
+     '</tr></thead>'+
+     '<tbody>'+rows+'</tbody>'+
+    '</table>'+
+   '</div>';
+ }
+
+ $('customerPrev').disabled=customerPage<=1;
+ $('customerNext').disabled=!customerHasMore;
+ $('customerPageInfo').textContent='Halaman '+customerPage;
+}
+
+async function loadCustomers(page=1){
+ const result=$('customerResult');
+ const button=$('customers');
+
+ customerPage=Math.max(1,page);
+ button.disabled=true;
+ $('customerLoadStatus').textContent='Memuat dari GenieACS...';
+ result.innerHTML='<div class="customer-empty">Mengambil data perangkat dari GenieACS...</div>';
+
+ try{
+  const data=await api(
+   '/api/admin/genieacs/devices?page='+customerPage+
+   '&perPage='+customerPerPage
+  );
+
+  if(!data.success || !Array.isArray(data.devices)){
+   throw new Error(data.message||'Respons daftar perangkat GenieACS tidak valid.');
+  }
+
+  customerCache=data.devices;
+  customerHasMore=!!data.hasMore;
+  renderCustomers();
+ }catch(e){
+  customerCache=[];
+  customerHasMore=false;
+  $('customerCount').textContent='0';
+  $('customerLoadStatus').textContent='Gagal dimuat';
+  result.innerHTML='<div class="customer-empty customer-error">'+
+   escapeOtpHtml(e.message)+'</div>';
+  $('customerPrev').disabled=customerPage<=1;
+  $('customerNext').disabled=true;
+  $('customerPageInfo').textContent='Halaman '+customerPage;
+ }finally{
+  button.disabled=false;
+ }
+}
+
+$('customers').onclick=()=>loadCustomers(customerPage);
+$('customerSearch').addEventListener('input',renderCustomers);
+$('customerPrev').onclick=()=>loadCustomers(customerPage-1);
+$('customerNext').onclick=()=>loadCustomers(customerPage+1);
 $('logs').onclick=async()=>{
  try{$('logsResult').textContent=JSON.stringify(await api('/api/admin/logs'),null,2);}
  catch(e){$('logsResult').textContent=e.message;}
@@ -1258,6 +1664,7 @@ $('appLogDate').value=new Date(
  Date.now()-new Date().getTimezoneOffset()*60000
 ).toISOString().slice(0,10);
 
+setupAdminLayout();
 init().then(startAutoWaRefresh).catch(()=>{});
 </script>
 </body>

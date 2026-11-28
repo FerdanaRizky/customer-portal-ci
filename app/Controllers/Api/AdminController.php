@@ -410,6 +410,81 @@ class AdminController extends BaseController
         return $this->json(['success' => true]);
     }
 
+    public function genieacsDevices()
+    {
+        if ($response = $this->guard()) {
+            return $response;
+        }
+
+        $page = max(1, (int) $this->request->getGet('page'));
+        $perPage = (int) $this->request->getGet('perPage');
+        $perPage = max(10, min(100, $perPage ?: 25));
+        $skip = ($page - 1) * $perPage;
+
+        try {
+            $query = (new GenieAcsClient())->request(
+                'GET',
+                'devices/?projection=_id,_deviceId,_tags,_lastInform,InternetGatewayDevice.DeviceInfo.*&limit=' .
+                $perPage . '&skip=' . $skip
+            );
+
+            $devices = [];
+
+            foreach ($query as $device) {
+                if (!is_array($device)) {
+                    continue;
+                }
+
+                $deviceInfo = $device['InternetGatewayDevice']['DeviceInfo'] ?? [];
+                $deviceIdInfo = $device['_deviceId'] ?? [];
+
+                $value = static function (array $source, string $key, $fallback = null) {
+                    $item = $source[$key] ?? null;
+
+                    if (is_array($item) && array_key_exists('_value', $item)) {
+                        return $item['_value'];
+                    }
+
+                    return $item ?? $fallback;
+                };
+
+                $phone = null;
+                foreach (($device['_tags'] ?? []) as $tag) {
+                    if (is_string($tag) && preg_match('/^customer:(.+)$/', $tag, $matches)) {
+                        $phone = $matches[1];
+                        break;
+                    }
+                }
+
+                $devices[] = [
+                    'id' => (string) ($device['_id'] ?? ''),
+                    'phone' => $phone,
+                    'manufacturer' => $value($deviceInfo, 'Manufacturer', $deviceIdInfo['_Manufacturer'] ?? null),
+                    'model' => $value($deviceInfo, 'ModelName', $deviceIdInfo['_ProductClass'] ?? null),
+                    'serialNumber' => $value($deviceInfo, 'SerialNumber', $deviceIdInfo['_SerialNumber'] ?? null),
+                    'lastInform' => $device['_lastInform'] ?? null,
+                ];
+            }
+
+            return $this->json([
+                'success' => true,
+                'devices' => $devices,
+                'page' => $page,
+                'perPage' => $perPage,
+                'hasMore' => count($devices) === $perPage,
+            ]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Admin GenieACS device listing failed: {error}', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->json([
+                'success' => false,
+                'message' => 'Gagal mengambil daftar perangkat dari GenieACS.',
+            ], 502);
+        }
+    }
+
     public function customers()
     {
         if ($r = $this->guard()) {
