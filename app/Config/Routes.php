@@ -28,6 +28,7 @@ $routes->group('api', static function (RouteCollection $routes): void {
     $routes->post('admin/auth/login', 'Api\\AdminController::login');
     $routes->post('admin/auth/logout', 'Api\\AdminController::logout');
     $routes->get('admin/status', 'Api\\AdminController::status');
+    $routes->get('admin/health', 'Api\\AdminController::health');
     $routes->get('admin/settings', 'Api\\AdminController::settings');
     $routes->put('admin/settings', 'Api\\AdminController::saveSettings');
     $routes->post('admin/logo', 'Api\\AdminController::uploadLogo');
