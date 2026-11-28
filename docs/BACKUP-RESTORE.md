@@ -61,3 +61,23 @@ Skrip restore menggunakan koneksi database dari `.env` yang sedang aktif dan tid
 - `tar`, `gzip`, `grep`, `sed`, `find`, `awk`
 
 Jalankan uji restore hanya pada waktu pemeliharaan atau database uji. Jangan menguji restore pada database produksi karena seluruh data database aktif akan diganti.
+
+
+## Uji restore tanpa menyentuh database produksi
+
+Gunakan skrip terpisah ini untuk menguji apakah dump dapat diimpor ke database baru. Skrip membuat database bernama `<database_aktif>_restore_test_<timestamp>`, lalu mengimpor dump ke sana. Database produksi tidak dihapus atau ditimpa.
+
+```bash
+cd /www/wwwroot/portal.pesonawifi.my.id
+bash scripts/test-restore.sh
+```
+
+Pilih arsip backup saat diminta. Akun database yang dipakai harus memiliki hak `CREATE DATABASE`. Jika hak tersebut tidak tersedia, skrip berhenti pada pembuatan database uji dan database produksi tetap tidak disentuh.
+
+Setelah pengujian, periksa tabel pada database uji. Jika sudah selesai, hapus hanya database uji yang namanya dicetak oleh skrip:
+
+```sql
+DROP DATABASE `NAMA_DATABASE_UJI`;
+```
+
+Jangan menjalankan perintah DROP terhadap nama database produksi.
