@@ -44,7 +44,7 @@ DB_PORT="${DB_PORT:-3306}"
 ARCHIVE="${1:-}"
 if [[ -z "$ARCHIVE" ]]; then
   echo "Backup tersedia:"
-  find "$BACKUP_DIR" -maxdepth 1 -type f -name 'customer-portal-*.tar.gz' -printf '%f\\n' | sort -r
+  find "$BACKUP_DIR" -maxdepth 1 -type f -name 'customer-portal-*.tar.gz' -printf '%f\n' | sort -r
   read -r -p "Nama arsip yang akan diuji: " NAME
   ARCHIVE="$BACKUP_DIR/$NAME"
 fi
@@ -68,11 +68,11 @@ MYSQL_CNF="$(mktemp)"
 chmod 600 "$MYSQL_CNF"
 escape_option() { local v="$1"; v="${v//\\/\\\\}"; v="${v//\"/\\\"}"; printf '"%s"' "$v"; }
 {
-  printf '[client]\\n'
-  printf 'host=%s\\n' "$(escape_option "$DB_HOST")"
-  printf 'user=%s\\n' "$(escape_option "$TEST_USER")"
-  printf 'password=%s\\n' "$(escape_option "$TEST_PASS")"
-  printf 'port=%s\\n' "$(escape_option "$DB_PORT")"
+  printf '[client]\n'
+  printf 'host=%s\n' "$(escape_option "$DB_HOST")"
+  printf 'user=%s\n' "$(escape_option "$TEST_USER")"
+  printf 'password=%s\n' "$(escape_option "$TEST_PASS")"
+  printf 'port=%s\n' "$(escape_option "$DB_PORT")"
 } > "$MYSQL_CNF"
 unset TEST_PASS
 
