@@ -100,9 +100,27 @@ small{color:var(--muted)}
 
  <nav class="tabs" aria-label="Menu Admin">
   <button class="tab active" data-tab="whatsapp">WhatsApp</button>
+  <button class="tab" data-tab="health">Status Sistem</button>
   <button class="tab" data-tab="settings">Pengaturan</button>
   <button class="tab" data-tab="account">Akun</button>
  </nav>
+
+ <section class="tab-panel" id="tab-health" hidden>
+  <div class="card">
+   <h2>Monitoring dan Health Check</h2>
+   <p class="muted">Memeriksa koneksi database, API GenieACS, dan GOWA menggunakan device aktif Customer Portal. Pemeriksaan ini hanya membaca status dan tidak mengubah konfigurasi atau sesi WhatsApp.</p>
+   <div class="status">
+    <span class="dot" id="healthOverallDot"></span>
+    <div><strong id="healthOverall">Belum diperiksa</strong><div class="muted" id="healthCheckedAt">Tekan tombol untuk memulai pemeriksaan.</div></div>
+   </div>
+   <div id="healthChecks" aria-live="polite">
+    <p class="muted">Hasil pemeriksaan akan ditampilkan di sini.</p>
+   </div>
+   <div class="actions"><button type="button" id="refreshHealth">Periksa Ulang</button></div>
+   <p class="message" id="healthRuntime"></p>
+   <p class="message" id="healthMessage"></p>
+  </div>
+ </section>
 
  <section class="tab-panel" id="tab-whatsapp">
   <div class="card">
@@ -346,6 +364,7 @@ function activateTab(name){
  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
  document.querySelectorAll('.tab-panel').forEach(p=>p.hidden=p.id!=='tab-'+name);
 }
+ if(name==='health') loadSystemHealth();
 
 document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>activateTab(b.dataset.tab)));
 
@@ -379,6 +398,7 @@ async function init(){
  $('currentAdminUsername').value=d.admin?.username||'';
  $('newUsername').value=d.admin?.username||'';
  await loadSettings();
+ await loadSystemHealth();
  await loadWaDevices();
  await loadOtpDeliveryLogs();
 }
@@ -798,7 +818,52 @@ $('saveCredentials').onclick=async()=>{
  finally{$('saveCredentials').disabled=false;}
 };
 
+function healthLabel(status){
+ return status==='healthy'?'Normal':(status==='warning'?'Perlu perhatian':'Tidak tersedia');
+}
+async function loadSystemHealth(){
+ const button=$('refreshHealth');
+ const list=$('healthChecks');
+ if(button)button.disabled=true;
+ $('healthMessage').textContent='Memeriksa layanan...';
+ try{
+  const data=await api('/api/admin/health');
+  const status=data.status||'down';
+  $('healthOverall').textContent=status==='healthy'?'Semua layanan normal':(status==='warning'?'Ada layanan perlu perhatian':'Ada layanan tidak tersedia');
+  $('healthOverallDot').className='dot '+(status==='healthy'?'ok':'bad');
+  $('healthCheckedAt').textContent='Pemeriksaan: '+(data.checkedAt||'-');
+  list.replaceChildren();
+  const labels={database:'Database',genieacs:'GenieACS API',gowa:'WhatsApp GOWA'};
+  Object.entries(data.checks||{}).forEach(([key,item])=>{
+   const row=document.createElement('div');
+   row.className='status';
+   const dot=document.createElement('span');
+   dot.className='dot '+(item.status==='healthy'?'ok':'bad');
+   const body=document.createElement('div');
+   const title=document.createElement('strong');
+   title.textContent=labels[key]||key;
+   const detail=document.createElement('div');
+   detail.className='muted';
+   detail.textContent=(item.message||healthLabel(item.status))+' · '+Number(item.durationMs||0)+' ms · '+healthLabel(item.status);
+   body.append(title,detail);
+   row.append(dot,body);
+   list.appendChild(row);
+  });
+  $('healthRuntime').textContent='PHP '+(data.runtime?.phpVersion||'-')+' · Environment '+(data.runtime?.environment||'-');
+  $('healthMessage').textContent='Pemeriksaan selesai.';
+ }catch(e){
+  $('healthOverall').textContent='Pemeriksaan gagal';
+  $('healthOverallDot').className='dot bad';
+  $('healthCheckedAt').textContent='Status tidak dapat dimuat.';
+  list.textContent=e.message;
+  $('healthRuntime').textContent='';
+  $('healthMessage').textContent='Periksa koneksi aplikasi dan coba kembali.';
+ }finally{
+  if(button)button.disabled=false;
+ }
+}
 $('checkWa').onclick=refreshWa;
+$('refreshHealth').onclick=loadSystemHealth;
 $('refreshWaDevices').onclick=loadWaDevices;
 $('saveWaDevice').onclick=saveWaDevice;
 $('createWaDevice').onclick=createNewWaDevice;
