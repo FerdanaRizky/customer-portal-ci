@@ -774,6 +774,203 @@ class AdminController extends BaseController
         ]);
     }
 
+
+    /**
+     * Metrik lokal aplikasi. Tidak membutuhkan akses shell atau /proc.
+     */
+    public function monitoringMetrics()
+    {
+        if ($r = $this->guard()) {
+            return $r;
+        }
+
+        $path = WRITEPATH;
+        $total = @disk_total_space($path);
+        $free = @disk_free_space($path);
+
+        $memoryLimit = trim((string) ini_get('memory_limit'));
+        $limitBytes = null;
+
+        if ($memoryLimit !== '' && $memoryLimit !== '-1') {
+            $unit = strtolower(substr($memoryLimit, -1));
+            $number = (float) $memoryLimit;
+            $factor = match ($unit) {
+                'g' => 1024 ** 3,
+                'm' => 1024 ** 2,
+                'k' => 1024,
+                default => 1,
+            };
+            $limitBytes = (int) ($number * $factor);
+        }
+
+        $diskValid = is_numeric($total) && is_numeric($free) && $total > 0;
+
+        return $this->json([
+            'success' => true,
+            'checkedAt' => date(DATE_ATOM),
+            'disk' => [
+                'available' => $diskValid,
+                'totalBytes' => $diskValid ? (int) $total : null,
+                'freeBytes' => $diskValid ? (int) $free : null,
+                'usedBytes' => $diskValid ? (int) ($total - $free) : null,
+                'usedPercent' => $diskValid
+                    ? round((($total - $free) / $total) * 100, 2)
+                    : null,
+            ],
+            'phpMemory' => [
+                'usedBytes' => memory_get_usage(true),
+                'peakBytes' => memory_get_peak_usage(true),
+                'limitBytes' => $limitBytes,
+                'limit' => $memoryLimit !== '' ? $memoryLimit : 'unknown',
+            ],
+            'runtime' => [
+                'phpVersion' => PHP_VERSION,
+                'sapi' => PHP_SAPI,
+            ],
+        ]);
+    }
+
+    /**
+     * Membaca potongan log CodeIgniter secara read-only.
+     * Nama file hanya menerima format tanggal yang valid.
+     */
+    public function applicationLogs()
+    {
+        if ($r = $this->guard()) {
+            return $r;
+        }
+
+        $date = trim((string) $this->request->getGet('date'));
+        if ($date === '') {
+            $date = date('Y-m-d');
+        }
+
+        $parts = explode('-', $date);
+        if (
+            !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)
+            || count($parts) !== 3
+            || !checkdate((int) $parts[1], (int) $parts[2], (int) $parts[0])
+        ) {
+            return $this->json([
+                'success' => false,
+                'message' => 'Tanggal log tidak valid.',
+            ], 400);
+        }
+
+        $level = strtolower(trim((string) $this->request->getGet('level')));
+        $allowedLevels = ['all', 'error', 'critical', 'warning', 'info', 'debug'];
+
+        if ($level === '') {
+            $level = 'all';
+        }
+        if (!in_array($level, $allowedLevels, true)) {
+            return $this->json([
+                'success' => false,
+                'message' => 'Filter level tidak valid.',
+            ], 400);
+        }
+
+        $query = trim((string) $this->request->getGet('q'));
+        $query = mb_substr($query, 0, 100);
+        $limit = (int) $this->request->getGet('limit');
+        $limit = max(1, min(100, $limit ?: 50));
+
+        $fileName = 'log-' . $date . '.log';
+        $logDirectory = realpath(WRITEPATH . 'logs');
+        $filePath = $logDirectory
+            ? realpath($logDirectory . DIRECTORY_SEPARATOR . $fileName)
+            : false;
+
+        if (
+            !$logDirectory
+            || !$filePath
+            || !is_file($filePath)
+            || !str_starts_with($filePath, $logDirectory . DIRECTORY_SEPARATOR)
+            || !is_readable($filePath)
+        ) {
+            return $this->json([
+                'success' => true,
+                'date' => $date,
+                'logs' => [],
+                'count' => 0,
+                'message' => 'File log untuk tanggal tersebut tidak tersedia.',
+            ]);
+        }
+
+        $size = filesize($filePath);
+        $maxBytes = 512 * 1024;
+        $handle = fopen($filePath, 'rb');
+
+        if (!$handle) {
+            return $this->json([
+                'success' => false,
+                'message' => 'File log tidak dapat dibaca.',
+            ], 500);
+        }
+
+        if ($size > $maxBytes) {
+            fseek($handle, -$maxBytes, SEEK_END);
+        }
+
+        $content = stream_get_contents($handle);
+        fclose($handle);
+
+        $lines = preg_split('/\r\n|\r|\n/', (string) $content);
+        $lines = array_reverse($lines ?: []);
+        $results = [];
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+
+            $detected = 'info';
+            if (preg_match('/\b(critical|emergency|alert)\b/i', $line)) {
+                $detected = 'critical';
+            } elseif (preg_match('/\b(error|exception|fatal|parseerror)\b/i', $line)) {
+                $detected = 'error';
+            } elseif (preg_match('/\bwarning\b/i', $line)) {
+                $detected = 'warning';
+            } elseif (preg_match('/\bdebug\b/i', $line)) {
+                $detected = 'debug';
+            }
+
+            if ($level !== 'all' && $level !== $detected) {
+                continue;
+            }
+
+            if ($query !== '' && stripos($line, $query) === false) {
+                continue;
+            }
+
+            // Samarkan nilai yang berpotensi mengandung rahasia.
+            $safeLine = preg_replace(
+                '/((?:password|passwd|token|secret|api[_-]?key|authorization)\s*[=:]\s*)("[^"]*"|\'[^\']*\'|[^\s,;]+)/i',
+                '$1[REDACTED]',
+                $line
+            );
+
+            $results[] = [
+                'level' => $detected,
+                'message' => mb_substr((string) $safeLine, 0, 2000),
+            ];
+
+            if (count($results) >= $limit) {
+                break;
+            }
+        }
+
+        return $this->json([
+            'success' => true,
+            'date' => $date,
+            'level' => $level,
+            'count' => count($results),
+            'truncated' => $size > $maxBytes,
+            'logs' => $results,
+        ]);
+    }
+
     public function whatsappStatus()
     {
         if ($r = $this->guard()) {

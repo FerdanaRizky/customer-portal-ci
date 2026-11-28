@@ -77,6 +77,70 @@ small{color:var(--muted)}
  header{align-items:flex-start}.actions button{flex:1}
  h1{font-size:19px}
 }
+
+/* Tahap 6B - Monitoring */
+.monitor-grid{
+ display:grid;
+ grid-template-columns:repeat(2,minmax(0,1fr));
+ gap:14px;
+ margin-top:14px
+}
+.monitor-box{
+ min-width:0;padding:16px;background:var(--surface2);
+ border:1px solid var(--border);border-radius:12px
+}
+.monitor-value{font-size:25px;font-weight:800;margin:8px 0}
+.monitor-track{
+ height:9px;background:var(--bg);border-radius:20px;
+ overflow:hidden;margin:12px 0 8px
+}
+.monitor-fill{
+ height:100%;width:0;background:var(--success);
+ border-radius:20px;transition:width .25s ease
+}
+.monitor-fill.warning{background:#f59e0b}
+.monitor-fill.danger{background:var(--danger)}
+.monitor-meta{
+ display:flex;justify-content:space-between;gap:10px;
+ flex-wrap:wrap;color:var(--muted);font-size:12px
+}
+.monitor-filters{
+ display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+ gap:10px;margin:14px 0
+}
+.monitor-filters input,.monitor-filters select{
+ width:100%;min-width:0
+}
+.monitor-log-list{
+ display:flex;flex-direction:column;gap:8px;margin-top:12px
+}
+.monitor-log{
+ min-width:0;padding:12px;background:var(--surface2);
+ border:1px solid var(--border);border-radius:9px;
+ overflow-wrap:anywhere
+}
+.monitor-log-head{
+ display:flex;align-items:center;gap:8px;
+ flex-wrap:wrap;margin-bottom:7px
+}
+.monitor-log-level{
+ font-size:11px;font-weight:800;text-transform:uppercase;
+ padding:3px 8px;border-radius:20px;background:#334155;color:#e2e8f0
+}
+.monitor-log-level.error,.monitor-log-level.critical{
+ background:#7f1d1d;color:#fecaca
+}
+.monitor-log-level.warning{background:#78350f;color:#fde68a}
+.monitor-log-message{
+ white-space:pre-wrap;overflow-wrap:anywhere;
+ font:12px/1.6 ui-monospace,monospace;color:var(--text)
+}
+@media(max-width:650px){
+ .monitor-grid{grid-template-columns:1fr}
+ .monitor-filters{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .monitor-value{font-size:22px}
+}
+
 </style>
 </head>
 <body>
@@ -119,6 +183,63 @@ small{color:var(--muted)}
    <div class="actions"><button type="button" id="refreshHealth">Periksa Ulang</button></div>
    <p class="message" id="healthRuntime"></p>
    <p class="message" id="healthMessage"></p>
+  </div>
+
+
+  <div class="card">
+   <h2>Monitoring Server</h2>
+   <p class="muted">Informasi kapasitas penyimpanan dan penggunaan memori PHP pada aplikasi.</p>
+   <div id="monitoringMetrics" aria-live="polite">
+    <p class="muted">Memuat metrik server...</p>
+   </div>
+   <div class="actions">
+    <button type="button" class="secondary" id="refreshMetrics">Muat Ulang Metrik</button>
+   </div>
+   <p class="message" id="metricsMessage"></p>
+  </div>
+
+  <div class="card">
+   <h2>Log Aplikasi</h2>
+   <p class="muted">Melihat catatan aktivitas dan kesalahan aplikasi CodeIgniter. Data log hanya dibaca, tidak diubah atau dihapus.</p>
+
+   <div class="monitor-filters">
+    <div>
+     <label for="appLogDate">Tanggal</label>
+     <input type="date" id="appLogDate">
+    </div>
+    <div>
+     <label for="appLogLevel">Level</label>
+     <select id="appLogLevel">
+      <option value="all">Semua level</option>
+      <option value="error">Error</option>
+      <option value="critical">Critical</option>
+      <option value="warning">Warning</option>
+      <option value="info">Info</option>
+      <option value="debug">Debug</option>
+     </select>
+    </div>
+    <div>
+     <label for="appLogSearch">Cari pesan</label>
+     <input type="text" id="appLogSearch" placeholder="Ketik kata kunci">
+    </div>
+    <div>
+     <label for="appLogLimit">Jumlah baris</label>
+     <select id="appLogLimit">
+      <option value="20">20 baris</option>
+      <option value="50" selected>50 baris</option>
+      <option value="100">100 baris</option>
+     </select>
+    </div>
+   </div>
+
+   <div class="actions">
+    <button type="button" id="searchAppLogs">Tampilkan Log</button>
+    <button type="button" class="secondary" id="resetAppLogs">Reset Filter</button>
+   </div>
+   <p class="message" id="appLogMessage" aria-live="polite"></p>
+   <div id="appLogResults" aria-live="polite">
+    <p class="muted">Pilih tanggal untuk melihat log aplikasi.</p>
+   </div>
   </div>
  </section>
 
@@ -818,6 +939,186 @@ $('saveCredentials').onclick=async()=>{
  finally{$('saveCredentials').disabled=false;}
 };
 
+
+function formatBytes(bytes){
+ const value=Number(bytes);
+ if(!Number.isFinite(value)||value<0)return '-';
+ if(value===0)return '0 B';
+ const units=['B','KB','MB','GB','TB'];
+ const index=Math.min(Math.floor(Math.log(value)/Math.log(1024)),units.length-1);
+ return (value/Math.pow(1024,index)).toFixed(index===0?0:2)+' '+units[index];
+}
+
+async function loadMonitoringMetrics(){
+ const target=$('monitoringMetrics');
+ const message=$('metricsMessage');
+ const button=$('refreshMetrics');
+ if(button)button.disabled=true;
+ message.textContent='Mengambil metrik server...';
+
+ try{
+  const d=await api('/api/admin/monitoring/metrics');
+  const disk=d.disk||{};
+  const memory=d.phpMemory||{};
+  target.replaceChildren();
+
+  const grid=document.createElement('div');
+  grid.className='monitor-grid';
+
+  function addMetric(title,value,detail,percent,kind){
+   const box=document.createElement('div');
+   box.className='monitor-box';
+
+   const heading=document.createElement('div');
+   heading.className='muted';
+   heading.textContent=title;
+
+   const number=document.createElement('div');
+   number.className='monitor-value';
+   number.textContent=value;
+
+   const track=document.createElement('div');
+   track.className='monitor-track';
+
+   const fill=document.createElement('div');
+   fill.className='monitor-fill';
+   fill.style.width=Math.max(0,Math.min(100,Number(percent)||0))+'%';
+   if(kind)fill.classList.add(kind);
+   track.appendChild(fill);
+
+   const meta=document.createElement('div');
+   meta.className='monitor-meta';
+   meta.textContent=detail;
+
+   box.append(heading,number,track,meta);
+   grid.appendChild(box);
+  }
+
+  if(disk.available){
+   const used=Number(disk.usedPercent)||0;
+   addMetric(
+    'Penyimpanan Disk',
+    used.toFixed(2)+'% terpakai',
+    formatBytes(disk.usedBytes)+' digunakan · '+formatBytes(disk.freeBytes)+' tersedia',
+    used,
+    used>=90?'danger':(used>=75?'warning':'')
+   );
+   const total=document.createElement('p');
+   total.className='muted';
+   total.textContent='Total kapasitas: '+formatBytes(disk.totalBytes);
+   grid.lastChild.appendChild(total);
+  }else{
+   addMetric('Penyimpanan Disk','Tidak tersedia','Informasi disk tidak dapat dibaca.',0,'');
+  }
+
+  const used=Number(memory.usedBytes)||0;
+  const limit=Number(memory.limitBytes)||0;
+  const percent=limit>0?(used/limit)*100:0;
+  addMetric(
+   'Memori PHP',
+   formatBytes(used),
+   'Batas PHP: '+(memory.limit||'Tidak diketahui')+' · Puncak: '+formatBytes(memory.peakBytes),
+   percent,
+   percent>=90?'danger':(percent>=75?'warning':'')
+  );
+
+  target.appendChild(grid);
+
+  const runtime=document.createElement('p');
+  runtime.className='muted';
+  runtime.style.marginTop='14px';
+  runtime.textContent='PHP '+(d.runtime?.phpVersion||'-')+
+   ' · SAPI '+(d.runtime?.sapi||'-')+
+   ' · Pemeriksaan '+(d.checkedAt||'-');
+  target.appendChild(runtime);
+
+  message.textContent='Metrik berhasil diperbarui.';
+ }catch(e){
+  target.textContent='Gagal mengambil metrik: '+e.message;
+  message.textContent='Periksa koneksi aplikasi dan coba kembali.';
+ }finally{
+  if(button)button.disabled=false;
+ }
+}
+
+async function loadApplicationLogs(){
+ const result=$('appLogResults');
+ const message=$('appLogMessage');
+ const button=$('searchAppLogs');
+ if(button)button.disabled=true;
+
+ message.textContent='Memuat log aplikasi...';
+ result.replaceChildren();
+
+ try{
+  const params=new URLSearchParams();
+  params.set('date',$('appLogDate').value);
+  params.set('level',$('appLogLevel').value);
+  params.set('q',$('appLogSearch').value.trim());
+  params.set('limit',$('appLogLimit').value);
+
+  const d=await api('/api/admin/monitoring/application-logs?'+params.toString());
+  const logs=Array.isArray(d.logs)?d.logs:[];
+
+  const summary=document.createElement('p');
+  summary.className='muted';
+  summary.textContent='Tanggal '+d.date+' · '+d.count+' baris ditemukan'+
+   (d.truncated?' · Pembacaan dibatasi pada 512 KB terakhir':'');
+  result.appendChild(summary);
+
+  if(!logs.length){
+   const empty=document.createElement('div');
+   empty.className='otp-empty';
+   empty.textContent=d.message||'Tidak ada log yang sesuai dengan filter.';
+   result.appendChild(empty);
+  }else{
+   const list=document.createElement('div');
+   list.className='monitor-log-list';
+
+   logs.forEach(item=>{
+    const card=document.createElement('div');
+    card.className='monitor-log';
+
+    const head=document.createElement('div');
+    head.className='monitor-log-head';
+
+    const level=document.createElement('span');
+    level.className='monitor-log-level '+String(item.level||'info').toLowerCase();
+    level.textContent=String(item.level||'info');
+
+    head.appendChild(level);
+
+    const content=document.createElement('div');
+    content.className='monitor-log-message';
+    content.textContent=String(item.message||'');
+
+    card.append(head,content);
+    list.appendChild(card);
+   });
+
+   result.appendChild(list);
+  }
+
+  message.textContent='Log berhasil dimuat.';
+ }catch(e){
+  result.textContent='Gagal membaca log: '+e.message;
+  message.textContent='Pemeriksaan log gagal.';
+ }finally{
+  if(button)button.disabled=false;
+ }
+}
+
+function resetApplicationLogFilters(){
+ const now=new Date();
+ const localDate=new Date(now.getTime()-now.getTimezoneOffset()*60000)
+  .toISOString().slice(0,10);
+ $('appLogDate').value=localDate;
+ $('appLogLevel').value='all';
+ $('appLogSearch').value='';
+ $('appLogLimit').value='50';
+ loadApplicationLogs();
+}
+
 function healthLabel(status){
  return status==='healthy'?'Normal':(status==='warning'?'Perlu perhatian':'Tidak tersedia');
 }
@@ -864,6 +1165,21 @@ async function loadSystemHealth(){
 }
 $('checkWa').onclick=refreshWa;
 $('refreshHealth').onclick=loadSystemHealth;
+$('refreshMetrics').onclick=loadMonitoringMetrics;
+$('searchAppLogs').onclick=loadApplicationLogs;
+$('resetAppLogs').onclick=resetApplicationLogFilters;
+$('appLogSearch').addEventListener('keydown',e=>{
+ if(e.key==='Enter')loadApplicationLogs();
+});
+document.querySelectorAll('.tab').forEach(b=>{
+ b.addEventListener('click',()=>{
+  if(b.dataset.tab==='health'){
+   loadMonitoringMetrics();
+   loadApplicationLogs();
+  }
+ });
+});
+
 $('refreshWaDevices').onclick=loadWaDevices;
 $('saveWaDevice').onclick=saveWaDevice;
 $('createWaDevice').onclick=createNewWaDevice;
@@ -937,6 +1253,10 @@ $('logout').onclick=async()=>{
  try{await api('/api/admin/auth/logout',{method:'POST'});location.reload();}
  catch(e){alert(e.message);}
 };
+
+$('appLogDate').value=new Date(
+ Date.now()-new Date().getTimezoneOffset()*60000
+).toISOString().slice(0,10);
 
 init().then(startAutoWaRefresh).catch(()=>{});
 </script>
