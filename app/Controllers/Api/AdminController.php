@@ -6,6 +6,7 @@ use App\Controllers\BaseController;
 use App\Models\PortalModel;
 use App\Libraries\ConfigStore;
 use App\Libraries\WhatsappGateway;
+use App\Libraries\GenieAcsClient;
 
 class AdminController extends BaseController
 {
@@ -690,6 +691,87 @@ class AdminController extends BaseController
         } catch (\Throwable $e) {
             return $this->json(['success' => false, 'message' => $e->getMessage()], 502);
         }
+    }
+
+    /**
+     * Pemeriksaan kesehatan dependensi aplikasi untuk administrator.
+     * Hanya mengembalikan status dan durasi; tidak pernah mengirim kredensial
+     * atau data perangkat ke browser.
+     */
+    public function health()
+    {
+        if ($r = $this->guard()) {
+            return $r;
+        }
+
+        $checks = [];
+        $overall = 'healthy';
+
+        $record = static function (string $name, string $status, string $message, int $durationMs) use (&$checks, &$overall): void {
+            $checks[$name] = [
+                'status' => $status,
+                'message' => $message,
+                'durationMs' => $durationMs,
+            ];
+
+            if ($status === 'down') {
+                $overall = 'down';
+            } elseif ($status === 'warning' && $overall === 'healthy') {
+                $overall = 'warning';
+            }
+        };
+
+        $started = hrtime(true);
+        try {
+            db_connect()->query('SELECT 1');
+            $record('database', 'healthy', 'Database dapat diakses.', (int) round((hrtime(true) - $started) / 1e6));
+        } catch (\Throwable $e) {
+            log_message('error', 'Health check database gagal.');
+            $record('database', 'down', 'Koneksi database gagal.', (int) round((hrtime(true) - $started) / 1e6));
+        }
+
+        if (($checks['database']['status'] ?? 'down') === 'healthy') {
+            $started = hrtime(true);
+            try {
+                (new GenieAcsClient())->request(
+                    'GET',
+                    'devices/?query=%7B%7D&projection=_id&limit=1'
+                );
+                $record('genieacs', 'healthy', 'API GenieACS merespons.', (int) round((hrtime(true) - $started) / 1e6));
+            } catch (\Throwable $e) {
+                log_message('error', 'Health check GenieACS gagal.');
+                $record('genieacs', 'down', 'API GenieACS tidak dapat diakses atau belum dikonfigurasi.', (int) round((hrtime(true) - $started) / 1e6));
+            }
+
+            $started = hrtime(true);
+            try {
+                $status = (new WhatsappGateway())->status();
+                if (!empty($status['loggedIn'])) {
+                    $record('gowa', 'healthy', 'GOWA aktif dan device WhatsApp Portal sudah login.', (int) round((hrtime(true) - $started) / 1e6));
+                } elseif (!empty($status['configured']) && !empty($status['connected'])) {
+                    $record('gowa', 'warning', 'GOWA aktif, tetapi sesi WhatsApp belum login.', (int) round((hrtime(true) - $started) / 1e6));
+                } else {
+                    $record('gowa', 'down', 'GOWA atau device WhatsApp Portal tidak dapat diakses.', (int) round((hrtime(true) - $started) / 1e6));
+                }
+            } catch (\Throwable $e) {
+                log_message('error', 'Health check GOWA gagal.');
+                $record('gowa', 'down', 'Pemeriksaan GOWA gagal atau konfigurasi belum lengkap.', (int) round((hrtime(true) - $started) / 1e6));
+            }
+        } else {
+            $record('genieacs', 'warning', 'Tidak diperiksa karena database tidak tersedia.', 0);
+            $record('gowa', 'warning', 'Tidak diperiksa karena database tidak tersedia.', 0);
+        }
+
+        return $this->json([
+            'success' => true,
+            'status' => $overall,
+            'checkedAt' => date('c'),
+            'checks' => $checks,
+            'runtime' => [
+                'phpVersion' => PHP_VERSION,
+                'environment' => ENVIRONMENT,
+            ],
+        ]);
     }
 
     public function whatsappStatus()
