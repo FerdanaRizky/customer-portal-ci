@@ -62,22 +62,22 @@ Skrip restore menggunakan koneksi database dari `.env` yang sedang aktif dan tid
 
 Jalankan uji restore hanya pada waktu pemeliharaan atau database uji. Jangan menguji restore pada database produksi karena seluruh data database aktif akan diganti.
 
-
 ## Uji restore tanpa menyentuh database produksi
 
-Gunakan skrip terpisah ini untuk menguji apakah dump dapat diimpor ke database baru. Skrip membuat database bernama `<database_aktif>_restore_test_<timestamp>`, lalu mengimpor dump ke sana. Database produksi tidak dihapus atau ditimpa.
+Buat database uji dan user MySQL terpisah melalui aaPanel. Gunakan nama berikut (atau sesuaikan konstanta di `scripts/test-restore.sh`):
+
+- Database: `customer_portal_restore_test`
+- User: `customer_portal_restore_test`
+
+Berikan user tersebut hak akses penuh hanya ke database uji. Jangan gunakan user database produksi.
+
+Jalankan:
 
 ```bash
 cd /www/wwwroot/portal.pesonawifi.my.id
 bash scripts/test-restore.sh
 ```
 
-Pilih arsip backup saat diminta. Akun database yang dipakai harus memiliki hak `CREATE DATABASE`. Jika hak tersebut tidak tersedia, skrip berhenti pada pembuatan database uji dan database produksi tetap tidak disentuh.
+Pilih arsip backup saat diminta. Skrip meminta password user uji secara tersembunyi, memeriksa bahwa database tujuan tersedia dan kosong, lalu mengimpor dump ke database uji tersebut. Skrip tidak membuat atau menghapus database, dan tidak menggunakan kredensial database produksi. Jika database uji sudah berisi tabel, skrip berhenti agar data yang ada tidak tertimpa.
 
-Setelah pengujian, periksa tabel pada database uji. Jika sudah selesai, hapus hanya database uji yang namanya dicetak oleh skrip:
-
-```sql
-DROP DATABASE `NAMA_DATABASE_UJI`;
-```
-
-Jangan menjalankan perintah DROP terhadap nama database produksi.
+Setelah pengujian berhasil, periksa tabel dan data pada database uji melalui aaPanel. Jika sudah selesai, hapus hanya database uji melalui aaPanel. Jangan menghapus database produksi.
