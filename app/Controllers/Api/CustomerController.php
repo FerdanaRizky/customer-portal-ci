@@ -185,7 +185,7 @@ class CustomerController extends BaseController
             $result = $this->client()->request(
                 'GET',
                 'devices/?query=' . $query .
-                '&projection=_id,_deviceId,_lastInform,InternetGatewayDevice.DeviceInfo,InternetGatewayDevice.LANDevice.1.WLANConfiguration,InternetGatewayDevice.WANDevice.1.WANCommonInterfaceConfig,InternetGatewayDevice.WANDevice.1.WANConnectionDevice,InternetGatewayDevice.WANDevice.1.X_CT-COM_EponInterfaceConfig,VirtualParameters.RXPower'
+                '&projection=_id,_deviceId,_lastInform,InternetGatewayDevice.DeviceInfo,InternetGatewayDevice.LANDevice.1.WLANConfiguration,InternetGatewayDevice.LANDevice.1.Hosts.Host,InternetGatewayDevice.WANDevice.1.WANCommonInterfaceConfig,InternetGatewayDevice.WANDevice.1.WANConnectionDevice,InternetGatewayDevice.WANDevice.1.X_CT-COM_EponInterfaceConfig,VirtualParameters.RXPower,VirtualParameters.gettemp'
             );
 
             $raw = $result[0] ?? null;
@@ -283,12 +283,42 @@ class CustomerController extends BaseController
                 );
             }
 
+            // Ambil suhu dari Virtual Parameter GenieACS bernama gettemp.
+            $temperature = $this->parameterValue(
+                $raw,
+                ['VirtualParameters', 'gettemp']
+            );
+
             $connectedDevices = 0;
 
             foreach ($wifiList as $wifi) {
                 if ($wifi['enabled']) {
                     $connectedDevices += $wifi['connectedDevices'];
                 }
+            }
+
+            // Ambil daftar host LAN dari GenieACS.
+            $hostsRaw = $igd['LANDevice']['1']['Hosts']['Host'] ?? [];
+            $hostsList = [];
+
+            foreach ($hostsRaw as $hostIndex => $host) {
+                if (!is_array($host) || !is_numeric($hostIndex)) {
+                    continue;
+                }
+
+                $active = (bool) $this->parameterValue($host, ['Active'], false);
+
+                // Hanya tampilkan host yang terdeteksi aktif.
+                if (!$active) {
+                    continue;
+                }
+
+                $hostsList[] = [
+                    'name' => $this->parameterValue($host, ['HostName']),
+                    'ip' => $this->parameterValue($host, ['IPAddress']),
+                    'mac' => $this->parameterValue($host, ['MACAddress']),
+                    'active' => $active,
+                ];
             }
 
             // Hanya kirim data yang sudah dipilih.
@@ -304,9 +334,11 @@ class CustomerController extends BaseController
                 'connection' => [
                     'accessType' => $accessType,
                     'opticalRxPowerRaw' => $rxPower,
+                    'temperature' => $temperature,
                 ],
                 'wifi' => $wifiList,
                 'connectedDevices' => $connectedDevices,
+                'hosts' => $hostsList,
             ];
 
             return $this->json([
