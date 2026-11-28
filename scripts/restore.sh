@@ -17,6 +17,7 @@ trap cleanup EXIT
 fail() { echo "ERROR: $*" >&2; exit 1; }
 [[ -f "$ROOT_DIR/.env" ]] || fail ".env aktif tidak ditemukan. Restore menggunakan koneksi database dari .env aktif."
 command -v mysql >/dev/null 2>&1 || fail "mysql client tidak ditemukan."
+command -v mysqldump >/dev/null 2>&1 || fail "mysqldump tidak ditemukan; diperlukan untuk backup pengaman sebelum restore."
 command -v tar >/dev/null 2>&1 || fail "tar tidak ditemukan."
 
 env_value() {
