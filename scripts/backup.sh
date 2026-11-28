@@ -16,7 +16,6 @@ trap cleanup EXIT
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 [[ -f "$ROOT_DIR/.env" ]] || fail ".env tidak ditemukan di $ROOT_DIR"
-command -v php >/dev/null 2>&1 || fail "PHP CLI tidak ditemukan."
 command -v mysqldump >/dev/null 2>&1 || fail "mysqldump tidak ditemukan. Pasang paket client MySQL/MariaDB."
 command -v mysql >/dev/null 2>&1 || fail "mysql client tidak ditemukan."
 command -v tar >/dev/null 2>&1 || fail "tar tidak ditemukan."
