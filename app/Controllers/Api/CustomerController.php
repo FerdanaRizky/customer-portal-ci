@@ -94,6 +94,49 @@ class CustomerController extends BaseController
         return $default;
     }
 
+    private function displayConfig(): array
+    {
+        $model = new \App\Models\PortalModel();
+
+        return \App\Libraries\PortalDisplayConfig::normalize(
+            $model->setting('portal_display_config')
+        );
+    }
+
+    public function portalConfig()
+    {
+        $customer = $this->requireCustomer();
+
+        if (!$customer) {
+            return $this->json(['success' => false], 401);
+        }
+
+        if ($guard = $this->validateCustomerMapping($customer)) {
+            return $guard;
+        }
+
+        $model = new \App\Models\PortalModel();
+        $ssidIndexes = json_decode(
+            $model->setting('ssid_indexes', '[1,5]'),
+            true
+        );
+
+        if (!is_array($ssidIndexes)) {
+            $ssidIndexes = [];
+        }
+
+        $ssidIndexes = array_values(array_unique(array_filter(
+            array_map('intval', $ssidIndexes),
+            static fn ($value) => $value >= 1 && $value <= 8
+        )));
+
+        return $this->json([
+            'success' => true,
+            'config' => $this->displayConfig(),
+            'ssidIndexes' => $ssidIndexes,
+        ]);
+    }
+
     public function me()
     {
         $customer = $this->requireCustomer();
@@ -309,6 +352,16 @@ class CustomerController extends BaseController
             return $guard;
         }
 
+        $config = $this->displayConfig();
+        $feature = $parameter === 'SSID' ? 'updateSsid' : 'updatePassword';
+
+        if (!$config['sections']['wifi'] || !$config['features'][$feature]) {
+            return $this->json([
+                'success' => false,
+                'message' => 'Fitur perubahan WiFi sedang dinonaktifkan oleh Admin.',
+            ], 403);
+        }
+
         $data = $this->request->getJSON(true) ?: $this->request->getPost();
 
         $index = (int) ($data['index'] ?? 0);
@@ -381,6 +434,13 @@ class CustomerController extends BaseController
 
         if ($guard = $this->validateCustomerMapping($customer)) {
             return $guard;
+        }
+
+        if (!$this->displayConfig()['features']['reboot']) {
+            return $this->json([
+                'success' => false,
+                'message' => 'Fitur Restart Modem sedang dinonaktifkan oleh Admin.',
+            ], 403);
         }
 
         $deviceId = (string) ($customer['deviceId'] ?? '');

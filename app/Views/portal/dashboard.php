@@ -29,24 +29,24 @@ input{max-width:260px;width:100%}
 <button id="logout">Keluar</button>
 </header>
 
-<section class="card">
+<section class="card" data-config-section="deviceInfo">
 <h2>Informasi Perangkat</h2>
-<div class="grid">
-<div><span class="muted">WhatsApp</span><h3 id="phone">-</h3></div>
-<div><span class="muted">Product Class</span><h3 id="product">-</h3></div>
-<div><span class="muted">Serial Number</span><h3 id="serial">-</h3></div>
-<div><span class="muted">Last Inform</span><h3 id="last">-</h3></div>
-<div><span class="muted">Manufacturer</span><h3 id="manufacturer">-</h3></div>
-<div><span class="muted">Jenis Koneksi</span><h3 id="accessType">-</h3></div>
-<div><span class="muted">Perangkat Terhubung</span><h3 id="connected">-</h3></div>
-<div><span class="muted">Optical RX Power</span><h3 id="rxPower">-</h3></div>
+<div class="grid" id="deviceInfoGrid">
+<div data-config-field="phone"><span class="muted" data-config-label="phone">WhatsApp</span><h3 id="phone">-</h3></div>
+<div data-config-field="product"><span class="muted" data-config-label="product">Product Class</span><h3 id="product">-</h3></div>
+<div data-config-field="serial"><span class="muted" data-config-label="serial">Serial Number</span><h3 id="serial">-</h3></div>
+<div data-config-field="lastInform"><span class="muted" data-config-label="lastInform">Last Inform</span><h3 id="last">-</h3></div>
+<div data-config-field="manufacturer"><span class="muted" data-config-label="manufacturer">Manufacturer</span><h3 id="manufacturer">-</h3></div>
+<div data-config-field="accessType"><span class="muted" data-config-label="accessType">Jenis Koneksi</span><h3 id="accessType">-</h3></div>
+<div data-config-field="connected"><span class="muted" data-config-label="connected">Perangkat Terhubung</span><h3 id="connected">-</h3></div>
+<div data-config-field="rxPower"><span class="muted" data-config-label="rxPower">Optical RX Power</span><h3 id="rxPower">-</h3></div>
 </div>
 <p id="msg" class="msg"></p>
-<button id="refresh">Refresh</button>
-<button id="reboot">Restart Modem</button>
+<button id="refresh" data-config-feature="refresh">Refresh</button>
+<button id="reboot" data-config-feature="reboot">Restart Modem</button>
 </section>
 
-<section class="card">
+<section class="card" data-config-section="wifi">
 <h2>Pengaturan WiFi</h2>
 <div id="wifi"><p class="muted">Memuat informasi WiFi...</p></div>
 </section>
@@ -115,16 +115,91 @@ function formatDate(value){
     return isNaN(d.getTime())?value:d.toLocaleString('id-ID');
 }
 
+let portalDisplayConfig=null;
+let portalSsidIndexes=[];
+
+function applyPortalDisplayConfig(config){
+    portalDisplayConfig=config||{};
+
+    const sections=portalDisplayConfig.sections||{};
+    const fields=portalDisplayConfig.fields||{};
+    const features=portalDisplayConfig.features||{};
+
+    document.querySelectorAll('[data-config-section]').forEach(section=>{
+        const key=section.dataset.configSection;
+        section.hidden=sections[key]===false;
+    });
+
+    const grid=$('deviceInfoGrid');
+
+    Object.entries(fields).forEach(([key,setting])=>{
+        const item=grid.querySelector('[data-config-field="'+key+'"]');
+        if(!item)return;
+
+        item.hidden=setting.visible===false;
+
+        const label=item.querySelector('[data-config-label]');
+        if(label && setting.label){
+            label.textContent=setting.label;
+        }
+    });
+
+    // Susun ulang elemen informasi berdasarkan angka urutan dari Admin.
+    [...grid.querySelectorAll('[data-config-field]')]
+        .sort((a,b)=>{
+            const orderA=Number(fields[a.dataset.configField]?.order)||99;
+            const orderB=Number(fields[b.dataset.configField]?.order)||99;
+            return orderA-orderB;
+        })
+        .forEach(item=>grid.appendChild(item));
+
+    document.querySelectorAll('[data-config-feature]').forEach(button=>{
+        const key=button.dataset.configFeature;
+        button.hidden=features[key]===false;
+    });
+}
+
 function renderWifi(list){
+    if(!Array.isArray(list)){
+        $('wifi').innerHTML='<p class="muted">Informasi WiFi tidak tersedia.</p>';
+        return;
+    }
+
+    // Tampilkan hanya indeks SSID yang dipilih oleh administrator.
+    const selectedIndexes=new Set(
+        portalSsidIndexes.map(Number).filter(i=>i>=1&&i<=8)
+    );
+
+    list=list.filter(x=>selectedIndexes.has(Number(x.index)));
+
+    if(list.length===0){
+        $('wifi').innerHTML='<p class="muted">Tidak ada WiFi yang dipilih untuk ditampilkan oleh administrator.</p>';
+        return;
+    }
+
     if(!Array.isArray(list)||list.length===0){
         $('wifi').innerHTML='<p class="muted">Informasi WiFi tidak tersedia.</p>';
         return;
     }
 
+    const features=portalDisplayConfig?.features||{};
+
     $('wifi').innerHTML=list.map(x=>{
         const i=Number(x.index);
         const ssid=esc(x.ssid||'');
         const enabled=x.enabled===true;
+
+        const ssidControl=features.updateSsid===false?'':`
+            <div>
+                <input id="s${i}" placeholder="Nama WiFi baru" value="${ssid}">
+                <button onclick="change(${i},'SSID')">Ubah SSID</button>
+            </div>`;
+
+        const passwordControl=features.updatePassword===false?'':`
+            <div>
+                <input id="p${i}" type="password" placeholder="Password baru">
+                <button onclick="change(${i},'KeyPassphrase')">Ubah Password</button>
+            </div>`;
 
         return `
         <div class="wifi-item">
@@ -133,16 +208,8 @@ function renderWifi(list){
             <p>Status: <b>${enabled?'Aktif':'Nonaktif'}</b></p>
             <p>Perangkat terhubung: <b>${Number(x.connectedDevices)||0}</b></p>
             <p>Keamanan: <b>${esc(x.security||'-')}</b></p>
-
-            <div>
-                <input id="s${i}" placeholder="Nama WiFi baru" value="${ssid}">
-                <button onclick="change(${i},'SSID')">Ubah SSID</button>
-            </div>
-
-            <div>
-                <input id="p${i}" type="password" placeholder="Password baru">
-                <button onclick="change(${i},'KeyPassphrase')">Ubah Password</button>
-            </div>
+            ${ssidControl}
+            ${passwordControl}
         </div>`;
     }).join('');
 }
@@ -151,6 +218,11 @@ async function load(){
     $('msg').textContent='Memuat data perangkat...';
 
     try{
+        const configResult=await api('/api/customer/portal-config');
+        applyPortalDisplayConfig(configResult.config||{});
+        portalSsidIndexes=Array.isArray(configResult.ssidIndexes)
+            ?configResult.ssidIndexes:[ ];
+
         const me=await api('/api/customer/me');
         $('phone').textContent=me.customer.phone||'-';
 

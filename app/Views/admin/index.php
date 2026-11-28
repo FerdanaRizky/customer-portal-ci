@@ -531,10 +531,33 @@ small{color:var(--muted)}
    </div>
   </div>
 
-  <div class="card">
-   <button id="saveSettings">Simpan Semua Pengaturan</button>
-   <p class="message" id="settingsMsg"></p>
-  </div>
+   <div class="card">
+    <h2>Pengaturan Tampilan Portal User</h2>
+    <p class="muted">Atur informasi yang ditampilkan kepada pelanggan, nama label, urutan informasi, dan fitur yang dapat digunakan.</p>
+
+    <h3>Bagian Portal</h3>
+    <div class="checks">
+     <label class="check"><input type="checkbox" id="portalSectionDeviceInfo"> Tampilkan Informasi Perangkat</label>
+     <label class="check"><input type="checkbox" id="portalSectionWifi"> Tampilkan Pengaturan WiFi</label>
+    </div>
+
+    <h3 style="margin-top:22px">Informasi Perangkat</h3>
+    <p class="muted">Centang untuk menampilkan informasi. Ubah label dan angka urutan sesuai kebutuhan.</p>
+    <div id="portalFieldSettings" style="display:grid;gap:10px"></div>
+
+    <h3 style="margin-top:22px">Fitur Pelanggan</h3>
+    <div class="checks">
+     <label class="check"><input type="checkbox" id="portalFeatureRefresh"> Refresh data perangkat</label>
+     <label class="check"><input type="checkbox" id="portalFeatureReboot"> Restart Modem</label>
+     <label class="check"><input type="checkbox" id="portalFeatureUpdateSsid"> Ubah SSID WiFi</label>
+     <label class="check"><input type="checkbox" id="portalFeatureUpdatePassword"> Ubah Password WiFi</label>
+    </div>
+   </div>
+
+   <div class="card">
+    <button id="saveSettings">Simpan Semua Pengaturan</button>
+    <p class="message" id="settingsMsg"></p>
+   </div>
  </section>
 
  <section class="tab-panel" id="tab-account" hidden>
@@ -787,10 +810,104 @@ function setupAdminLayout(){
  panel.dataset.layoutReady='1';
 }
 
+const portalDisplayFields=[
+ {key:'phone',label:'WhatsApp'},
+ {key:'product',label:'Product Class'},
+ {key:'serial',label:'Serial Number'},
+ {key:'lastInform',label:'Last Inform'},
+ {key:'manufacturer',label:'Manufacturer'},
+ {key:'accessType',label:'Jenis Koneksi'},
+ {key:'connected',label:'Perangkat Terhubung'},
+ {key:'rxPower',label:'Optical RX Power'}
+];
+
+function renderPortalDisplayConfig(config){
+ const c=config||{};
+ const sections=c.sections||{};
+ const features=c.features||{};
+ const fields=c.fields||{};
+
+ $('portalSectionDeviceInfo').checked=sections.deviceInfo!==false;
+ $('portalSectionWifi').checked=sections.wifi!==false;
+
+ $('portalFeatureRefresh').checked=features.refresh!==false;
+ $('portalFeatureReboot').checked=features.reboot!==false;
+ $('portalFeatureUpdateSsid').checked=features.updateSsid!==false;
+ $('portalFeatureUpdatePassword').checked=features.updatePassword!==false;
+
+ const container=$('portalFieldSettings');
+ container.replaceChildren();
+
+ portalDisplayFields.forEach((item,index)=>{
+  const value=fields[item.key]||{};
+  const row=document.createElement('div');
+  row.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) minmax(110px,1.5fr) 85px;gap:10px;align-items:center;padding:12px;border:1px solid var(--border);border-radius:10px';
+
+  const visibleWrap=document.createElement('label');
+  visibleWrap.className='check';
+  const visible=document.createElement('input');
+  visible.type='checkbox';
+  visible.dataset.portalVisible=item.key;
+  visible.checked=value.visible!==false;
+  visibleWrap.append(visible,document.createTextNode(' '+item.label));
+
+  const label=document.createElement('input');
+  label.type='text';
+  label.maxLength=50;
+  label.placeholder='Nama label';
+  label.value=value.label||item.label;
+  label.dataset.portalLabel=item.key;
+  label.style.cssText='width:100%;min-width:0';
+
+  const order=document.createElement('input');
+  order.type='number';
+  order.min='1';
+  order.max='99';
+  order.value=value.order??(index+1);
+  order.dataset.portalOrder=item.key;
+  order.setAttribute('aria-label','Urutan '+item.label);
+  order.style.width='100%';
+
+  row.append(visibleWrap,label,order);
+  container.append(row);
+ });
+}
+
+function collectPortalDisplayConfig(){
+ const fields={};
+
+ portalDisplayFields.forEach((item,index)=>{
+  const visible=document.querySelector('[data-portal-visible="'+item.key+'"]');
+  const label=document.querySelector('[data-portal-label="'+item.key+'"]');
+  const order=document.querySelector('[data-portal-order="'+item.key+'"]');
+
+  fields[item.key]={
+   visible:visible.checked,
+   label:label.value.trim()||item.label,
+   order:Math.max(1,Math.min(99,Number(order.value)||index+1))
+  };
+ });
+
+ return {
+  sections:{
+   deviceInfo:$('portalSectionDeviceInfo').checked,
+   wifi:$('portalSectionWifi').checked
+  },
+  fields,
+  features:{
+   refresh:$('portalFeatureRefresh').checked,
+   reboot:$('portalFeatureReboot').checked,
+   updateSsid:$('portalFeatureUpdateSsid').checked,
+   updatePassword:$('portalFeatureUpdatePassword').checked
+  }
+ };
+}
+
 async function loadSettings(){
  const d=await api('/api/admin/settings');
- settingsCache=d;
- $('appName').value=d.appName||'';
+  settingsCache=d;
+  renderPortalDisplayConfig(d.portalDisplayConfig);
+  $('appName').value=d.appName||'';
  $('appUrl').value=d.appUrl||'';
  $('genieacsUrl').value=d.genieacsUrl||'';
  $('gowaBaseUrl').value=d.gowaBaseUrl||'';
@@ -1179,7 +1296,8 @@ $('saveSettings').onclick=async()=>{
   gowaBaseUrl:$('gowaBaseUrl').value,
   gowaDeviceId:$('gowaDeviceId').value,
   forceHttps:$('forceHttps').checked,
-  ssidIndexes:indexes
+   ssidIndexes:indexes,
+   portalDisplayConfig:collectPortalDisplayConfig()
  };
  const secretInputs={
   genieacsUsername:'genieacsUsername',

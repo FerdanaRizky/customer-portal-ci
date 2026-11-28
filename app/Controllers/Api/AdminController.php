@@ -140,6 +140,9 @@ class AdminController extends BaseController
             ),
             'gowaBaseUrl' => $store->get('gowa_base_url', ''),
             'gowaDeviceId' => $store->get('gowa_device_id', ''),
+            'portalDisplayConfig' => \App\Libraries\PortalDisplayConfig::normalize(
+                $m->setting('portal_display_config')
+            ),
             'genieacsUsernameConfigured' => $store->hasSecret('genieacs_username'),
             'genieacsPasswordConfigured' => $store->hasSecret('genieacs_password'),
             'gowaUsernameConfigured' => $store->hasSecret('gowa_username'),
@@ -154,6 +157,22 @@ class AdminController extends BaseController
         }
 
         $d = $this->request->getJSON(true) ?: $this->request->getPost();
+
+        if (!is_array($d)) {
+            return $this->json([
+                'success' => false,
+                'message' => 'Format pengaturan tidak valid.',
+            ], 422);
+        }
+
+        if (array_key_exists('portalDisplayConfig', $d)
+            && !is_array($d['portalDisplayConfig'])) {
+            return $this->json([
+                'success' => false,
+                'message' => 'Format konfigurasi Portal User tidak valid.',
+            ], 422);
+        }
+
         $m = new PortalModel();
         $store = new ConfigStore();
 
@@ -208,6 +227,20 @@ class AdminController extends BaseController
             }
         }
 
+        if (array_key_exists('portalDisplayConfig', $d)) {
+            $config = \App\Libraries\PortalDisplayConfig::normalize(
+                json_encode($d['portalDisplayConfig'], JSON_UNESCAPED_UNICODE)
+            );
+
+            $m->saveSetting(
+                'portal_display_config',
+                json_encode(
+                    $config,
+                    JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+                )
+            );
+        }
+
         // Audit log hanya menyimpan nama pengaturan yang diubah.
         // Tidak pernah mencatat password atau kredensial.
         $safeChanges = array_values(array_intersect(
@@ -219,7 +252,8 @@ class AdminController extends BaseController
                 'ssidIndexes',
                 'forceHttps',
                 'gowaBaseUrl',
-                'gowaDeviceId'
+                'gowaDeviceId',
+                'portalDisplayConfig'
             ]
         ));
 

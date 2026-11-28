@@ -24,6 +24,7 @@ $routes->group('api', static function (RouteCollection $routes): void {
     $routes->post('auth/logout', 'Api\\AuthController::logout');
 
     $routes->get('customer/me', 'Api\\CustomerController::me');
+    $routes->get('customer/portal-config', 'Api\\CustomerController::portalConfig');
     $routes->get('customer/device', 'Api\\CustomerController::device');
     $routes->get('customer/wifi', 'Api\\CustomerController::wifi');
     $routes->post('customer/wifi/ssid', 'Api\\CustomerController::updateSsid');
